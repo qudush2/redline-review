@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Design tokens. Warm sand neutrals, an espresso dark, and a rust accent.
+   Tailwind turns each --color-* into utilities like bg-canvas or text-ink. */
+@theme {
+  --color-canvas: #f4ece2; /* app background */
+  --color-surface: #faf9f5; /* panels and bars */
+  --color-subtle: #efede4; /* hover and inset areas */
+  --color-line: #e5ddd1; /* borders */
+  --color-ink: #3d3329; /* main text */
+  --color-ink-muted: #7b6e61;
+  --color-ink-faint: #a99d90;
+  --color-espresso: #272620; /* dark navigation rail */
+  --color-rust: #7a4a30; /* primary accent */
+  --color-rust-dark: #5e3824;
+  --color-terracotta: #c58066;
+  --color-clay: #f3e2d7; /* light accent tint */
+  --color-sky: #d7e1ee; /* AI tint */
+  --color-sky-ink: #34506f;
+  --color-del: #a3341f;
+  --color-del-bg: #fbe8e2;
+  --color-ins: #2f6b3a;
+  --color-ins-bg: #e3f0e0;
 }
 
+/* Fonts come from next/font, which defines its variables on <body>.
+   "inline" makes Tailwind read them where they're used, not at the root. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+}
+
+/* The contract "paper". Plain Markdown elements styled like a legal document. */
+.paper {
+  font-family: var(--font-source-serif), Georgia, serif;
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: #2b241d;
+}
+.paper h1 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.01em;
+  margin-bottom: 0.5rem;
+}
+.paper h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.paper p {
+  margin-bottom: 0.9rem;
+  text-align: justify;
+}
+.paper strong {
+  font-weight: 600;
+}
+
+/* Redline marks: deletions struck through in red, insertions underlined in green. */
+.paper del {
+  color: var(--color-del);
+  background: var(--color-del-bg);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.paper ins {
+  color: var(--color-ins);
+  background: var(--color-ins-bg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Quiet scrollbars for the scrolling columns. */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
 }
