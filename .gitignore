@@ -1,0 +1,17 @@
+# Private planning notes (never commit)
+PLAN.md
+
+# Secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+
+# OS
+.DS_Store
