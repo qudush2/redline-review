@@ -29,6 +29,7 @@ import {
   type PreviewResponse,
   type SearchResponse,
   type SearchResult,
+  type SuggestionsResponse,
 } from "@/lib/api";
 import { makePendingChange, type PendingChange, type PendingChangeView } from "@/lib/pending";
 
@@ -54,6 +55,8 @@ export default function Home() {
   const [previewIds, setPreviewIds] = useState<string[]>([]); // which pending ids the preview includes
   const [changeErrors, setChangeErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false); // true while accepting
+  const [aiBusy, setAiBusy] = useState(false); // true while waiting for AI suggestions
+  const [aiResult, setAiResult] = useState<SuggestionsResponse | null>(null); // last AI answer, for the summary note
 
   const [editorName, setEditorName] = useState("Qudus");
   const [dialog, setDialog] = useState<{ mode: DialogMode; find: string } | null>(null);
@@ -124,6 +127,7 @@ export default function Home() {
     if (!activeId) return;
     setDocument(null);
     setPreview(null);
+    setAiResult(null);
     reloadDocument(activeId).catch(showError);
   }, [activeId, reloadDocument, showError]);
 
@@ -245,6 +249,25 @@ export default function Home() {
     acceptChanges(pending.filter((c) => !changeErrors[c.id]));
   }
 
+  // --- AI suggestions -----------------------------------------------------------------
+
+  // Ask the AI for edits. They arrive as pending cards (badged "AI"); nothing is saved.
+  async function askAi(instruction: string) {
+    if (!document || !instruction.trim()) return;
+    setAiBusy(true);
+    try {
+      const result = await api.suggestEdits(document.id, instruction);
+      // The server already dropped any suggestion whose text isn't in the document.
+      const newChanges = result.suggestions.map((request) => makePendingChange(request, "Redline AI"));
+      setPendingForActive((current) => [...current, ...newChanges]);
+      setAiResult(result);
+    } catch (error) {
+      showError(error);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   // --- Search ---------------------------------------------------------------------------
 
   // Search as the user types, waiting 300ms after the last keystroke.
@@ -331,7 +354,10 @@ export default function Home() {
                   onAcceptAll={acceptAll}
                   onSuggestEdit={() => setDialog({ mode: "edit", find: "" })}
                   onRenameTerm={() => setDialog({ mode: "rename", find: "" })}
-                  onAskAi={() => toast.info("AI suggestions aren't connected yet.")}
+                  onAskAi={askAi}
+                  aiBusy={aiBusy}
+                  aiResult={aiResult}
+                  onDismissAiResult={() => setAiResult(null)}
                 />
               </div>
             </main>

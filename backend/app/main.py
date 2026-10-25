@@ -6,7 +6,8 @@ search.py / parsing.py, and shape the response. No business logic lives here.
 API design in one paragraph:
   - Documents are REST resources: GET to read, POST to create, PATCH to edit.
   - Operations that aren't simple resource updates get "action" endpoints:
-    POST /documents/{id}/preview runs edits without saving.
+    POST /documents/{id}/preview runs edits without saving, and
+    POST /documents/{id}/suggestions asks the AI for edits (also saves nothing).
   - Reads never change anything; writes are PATCH/POST only.
 """
 
@@ -18,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app import parsing, store
+from app import llm, parsing, store
 from app.errors import AppError
 from app.models import (
     CreateDocumentRequest,
@@ -30,6 +31,8 @@ from app.models import (
     HistoryEntry,
     PreviewResponse,
     SearchResponse,
+    SuggestionsRequest,
+    SuggestionsResponse,
 )
 from app.search import search_documents
 
@@ -39,7 +42,7 @@ app = FastAPI(
     title="Redline Review API",
     description="Propose, preview, and apply contract edits, and search across documents.",
     # Show our error shape in the docs page for the common error codes.
-    responses={code: {"model": ErrorResponse} for code in (400, 404, 409, 413, 415, 422, 500)},
+    responses={code: {"model": ErrorResponse} for code in (400, 404, 409, 413, 415, 422, 500, 502, 503)},
 )
 
 # Uploads skip the Next.js proxy (it times out on large files in dev) and go
@@ -192,6 +195,17 @@ def preview_edit(doc_id: str, body: EditRequest):
         "redline_markdown": redline_markdown,
         "applied": applied,
     }
+
+
+@app.post("/documents/{doc_id}/suggestions", response_model=SuggestionsResponse)
+def suggest_edits(doc_id: str, body: SuggestionsRequest):
+    """Ask the AI for suggested edits. Nothing is saved: suggestions come back for the user to review.
+
+    Every suggestion is checked against the document first; ones whose text isn't there
+    (or is ambiguous) are returned under "dropped" instead. 503 if no API key is configured.
+    """
+    document = store.get_document(doc_id)
+    return llm.suggest_changes(document["text"], body.instruction, store.read_playbook())
 
 
 @app.get("/documents/{doc_id}/search", response_model=SearchResponse)

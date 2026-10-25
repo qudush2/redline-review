@@ -69,6 +69,13 @@ class OccurrenceOutOfRange(AppError):
     type = "occurrence_out_of_range"
 
 
+class AIServiceError(AppError):
+    """The AI provider failed, timed out, or declined the request."""
+
+    status = 502
+    type = "ai_unavailable"
+
+
 class AINotConfigured(AppError):
     status = 503
     type = "ai_not_configured"

@@ -184,6 +184,33 @@ class HistoryEntry(BaseModel):
     changes: list[AppliedChange]
 
 
+class SuggestionsRequest(BaseModel):
+    """Body for POST /documents/{id}/suggestions.
+
+    Example: {"instruction": "Bring this in line with our playbook"}
+    """
+
+    instruction: str = Field(min_length=1, max_length=2000)
+
+
+class DroppedSuggestion(BaseModel):
+    """An AI suggestion the guardrail threw out, and why.
+
+    Example: {"find": "State of Nevada", "why": "This text isn't in the document."}
+    """
+
+    find: str
+    why: str
+
+
+class SuggestionsResponse(BaseModel):
+    """AI-suggested edits that passed the guardrail, in the same shape as human edits."""
+
+    suggestions: list[ChangeRequest]
+    dropped: list[DroppedSuggestion]
+    model: str
+
+
 class ErrorResponse(BaseModel):
     """Every error has this shape.
 

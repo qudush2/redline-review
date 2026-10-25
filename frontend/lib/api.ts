@@ -72,6 +72,10 @@ export type SearchResponse = { query: string; total: number; limit: number; offs
 
 export type HistoryEntry = { version: number; timestamp: string; author: string; changes: AppliedChange[] };
 
+// AI suggestions that passed the guardrail, plus the ones it threw out.
+export type DroppedSuggestion = { find: string; why: string };
+export type SuggestionsResponse = { suggestions: ChangeRequest[]; dropped: DroppedSuggestion[]; model: string };
+
 // One match listed in an "ambiguous_match" error, so the user can pick it.
 export type AmbiguousMatch = { occurrence: number; snippet: string; match_start: number; match_end: number };
 
@@ -146,6 +150,10 @@ export const api = {
   // Same as editDocument, but nothing is saved. Returns the inline redline.
   previewChanges: (id: string, changes: ChangeRequest[], expectedVersion: number) =>
     sendJson<PreviewResponse>("POST", `/documents/${id}/preview`, { changes, expected_version: expectedVersion }),
+
+  // Ask the AI for suggested edits. Nothing is saved.
+  suggestEdits: (id: string, instruction: string) =>
+    sendJson<SuggestionsResponse>("POST", `/documents/${id}/suggestions`, { instruction }),
 
   search: (query: string, limit = 20, offset = 0) =>
     request<SearchResponse>(`/documents/search?${new URLSearchParams({ q: query, limit: String(limit), offset: String(offset) })}`),

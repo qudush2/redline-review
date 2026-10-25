@@ -52,7 +52,7 @@ function PrototypeLegend() {
       Prototype
       <span className="pointer-events-none invisible absolute right-0 top-full z-50 mt-1.5 w-64 rounded-lg bg-espresso px-3 py-2 text-[12px] leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover/legend:visible group-hover/legend:opacity-100">
         Grayed-out controls show where this screen fits in a full product but aren&apos;t built. Everything else works:
-        search, upload, suggest edits, accept or reject, and history.
+        search, upload, suggest edits, AI suggestions, accept or reject, and history.
       </span>
     </span>
   );

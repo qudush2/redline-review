@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUp, CheckCheck, PencilLine, Replace, Sparkles } from "lucide-react";
+import { ArrowUp, CheckCheck, LoaderCircle, PencilLine, Replace, ShieldCheck, Sparkles, X } from "lucide-react";
 import ChangeCard from "./ChangeCard";
-import ComingSoon from "./ComingSoon";
-import type { HistoryEntry } from "@/lib/api";
+import type { HistoryEntry, SuggestionsResponse } from "@/lib/api";
 import { occurrenceLabel, timeAgo } from "@/lib/format";
 import type { PendingChangeView } from "@/lib/pending";
 
@@ -18,6 +17,9 @@ type ChangesPanelProps = {
   onSuggestEdit: () => void;
   onRenameTerm: () => void;
   onAskAi: (instruction: string) => void;
+  aiBusy: boolean;
+  aiResult: SuggestionsResponse | null; // the last AI answer, summarized at the top of Pending
+  onDismissAiResult: () => void;
 };
 
 // Right column: pending redlines to accept/reject, version history, and the AI box.
@@ -41,19 +43,19 @@ export default function ChangesPanel(props: ChangesPanelProps) {
         {tab === "pending" ? <PendingList {...props} /> : <HistoryList entries={props.history} />}
       </div>
 
-      {/* Grayed out until AI suggestions are wired up (Phase 4). */}
-      <ComingSoon side="top" label="AI suggestions are being added next" className="w-full">
-        <AskAiBox onAskAi={props.onAskAi} />
-      </ComingSoon>
+      <AskAiBox onAskAi={props.onAskAi} busy={props.aiBusy} />
     </aside>
   );
 }
 
-function PendingList({ changes, busy, onAccept, onReject, onAcceptAll, onSuggestEdit, onRenameTerm }: ChangesPanelProps) {
+function PendingList(props: ChangesPanelProps) {
+  const { changes, busy, onAccept, onReject, onAcceptAll, onSuggestEdit, onRenameTerm } = props;
   const acceptableCount = changes.filter((view) => !view.error).length;
 
   return (
     <div className="flex flex-col gap-3">
+      {props.aiResult ? <AiResultNote result={props.aiResult} onDismiss={props.onDismissAiResult} /> : null}
+
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={onSuggestEdit}
@@ -98,11 +100,53 @@ function PendingList({ changes, busy, onAccept, onReject, onAcceptAll, onSuggest
   );
 }
 
+// Summary of the last AI answer, including what the guardrail threw out.
+// Example: "AI suggested 3 edits. 1 was dropped because its text didn't match the document."
+function AiResultNote({ result, onDismiss }: { result: SuggestionsResponse; onDismiss: () => void }) {
+  const keptCount = result.suggestions.length;
+  const droppedCount = result.dropped.length;
+
+  return (
+    <div className="rounded-xl border border-sky bg-sky/40 px-3.5 py-3 text-[13px] text-sky-ink">
+      <div className="flex items-start justify-between gap-2">
+        <p className="flex items-start gap-1.5 font-medium">
+          <Sparkles size={14} className="mt-0.5 shrink-0" />
+          {keptCount === 0
+            ? "AI found nothing to change."
+            : `AI suggested ${keptCount} ${keptCount === 1 ? "edit" : "edits"}. Review each one below.`}
+        </p>
+        <button title="Dismiss" onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100">
+          <X size={14} />
+        </button>
+      </div>
+
+      {droppedCount > 0 ? (
+        // The guardrail at work: suggestions whose text isn't in the document never reach the user.
+        <details className="mt-2">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-xs">
+            <ShieldCheck size={13} />
+            {droppedCount} {droppedCount === 1 ? "suggestion was" : "suggestions were"} dropped because{" "}
+            {droppedCount === 1 ? "it" : "they"} didn&apos;t match the document.
+          </summary>
+          <ul className="mt-1.5 flex flex-col gap-1 pl-5 text-xs">
+            {result.dropped.map((item, index) => (
+              <li key={index}>
+                <span className="font-serif">“{item.find}”</span>: {item.why}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 // Shown when nothing is pending: a short list of things to try in the prototype.
 const tryItSteps = [
   { title: "Search", detail: "Type “liability” in the search box on the left, then click a result." },
   { title: "Suggest an edit", detail: "Select text in the contract (try “thirty (30) days” in §9.2), then click Suggest edit." },
   { title: "Rename a term", detail: "Click Rename term above and change “Licensee” to “Customer”." },
+  { title: "Ask AI", detail: "Use the box below to check the contract against the playbook. Suggestions arrive as cards." },
   { title: "Accept or reject", detail: "Review the redline, accept a change, then open the History tab." },
 ];
 
@@ -169,8 +213,9 @@ function HistoryList({ entries }: { entries: HistoryEntry[] }) {
 
 const promptChips = ["Apply our playbook", "Tighten liability", "Check governing law"];
 
-function AskAiBox({ onAskAi }: { onAskAi: (instruction: string) => void }) {
-  const [instruction, setInstruction] = useState("");
+function AskAiBox({ onAskAi, busy }: { onAskAi: (instruction: string) => void; busy: boolean }) {
+  const [instruction, setInstruction] = useState("Apply our playbook");
+  const canSend = instruction.trim().length > 0 && !busy;
 
   return (
     <div className="w-full shrink-0 border-t border-line p-4">
@@ -192,19 +237,30 @@ function AskAiBox({ onAskAi }: { onAskAi: (instruction: string) => void }) {
         <textarea
           value={instruction}
           onChange={(event) => setInstruction(event.target.value)}
+          onKeyDown={(event) => {
+            // Enter sends; Shift+Enter adds a new line.
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              if (canSend) onAskAi(instruction);
+            }
+          }}
           rows={2}
+          disabled={busy}
           placeholder="Bring this in line with our playbook…"
-          className="flex-1 resize-none bg-transparent px-1 text-sm outline-none placeholder:text-ink-faint"
+          className="flex-1 resize-none bg-transparent px-1 text-sm outline-none placeholder:text-ink-faint disabled:opacity-60"
         />
         <button
           title="Ask AI"
           onClick={() => onAskAi(instruction)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rust text-white hover:bg-rust-dark"
+          disabled={!canSend}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rust text-white hover:bg-rust-dark disabled:opacity-40"
         >
-          <ArrowUp size={16} />
+          {busy ? <LoaderCircle size={16} className="animate-spin" /> : <ArrowUp size={16} />}
         </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-ink-faint">AI only suggests. Nothing changes until you accept it.</p>
+      <p className="mt-1.5 text-[11px] text-ink-faint">
+        {busy ? "Reviewing the contract against the playbook…" : "AI only suggests. Nothing changes until you accept it."}
+      </p>
     </div>
   );
 }
