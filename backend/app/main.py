@@ -159,15 +159,10 @@ def upload_document(
     author: str = Form("Anonymous"),
 ):
     """Upload a file. It's converted to Markdown and stored as a new document."""
-    # 1. Read the file, but at most 1 byte past the limit. That's enough to know it's
-    #    too big without loading a huge file into memory.
+    # Read at most 1 byte past the limit: enough to know it's too big without loading it all.
     filename = file.filename or "upload.txt"
     data = file.file.read(parsing.MAX_UPLOAD_BYTES + 1)
-
-    # 2. Check the type/size and convert to Markdown (raises 413/415/400 on problems).
-    text, file_type = parsing.parse_upload(filename, data)
-
-    # 3. Save it.
+    text, file_type = parsing.parse_upload(filename, data)  # 400 / 413 / 415 on problems
     return store.create_document(title or parsing.title_from_filename(filename), text, file_type, author)
 
 

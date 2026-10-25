@@ -41,10 +41,7 @@ def seed() -> None:
         backend/data/playbook.md    ->  skipped (it's not a contract)
     """
     with _lock:
-        # Start from empty, so calling seed() again (e.g. between tests) resets everything.
         documents.clear()
-
-        # Every .md file in data/ becomes a document, except the playbook.
         for path in sorted(DATA_DIR.glob("*.md")):
             if path.name == PLAYBOOK_FILE:
                 continue
@@ -111,19 +108,12 @@ def save_changes(
         save_changes("master-services-agreement", [Change("not there", "x")])
             -> raises TargetNotFound; still version 2, nothing saved
     """
-    # Everything below happens while holding the lock, so no other request can
-    # sneak in a save between our "read" and our "write".
+    # The whole read -> check -> apply -> save runs under the lock, so no other
+    # request can save in between and be silently overwritten.
     with _lock:
-        # 1. Get the current document.
         document = get_document(doc_id)
-
-        # 2. Make sure nobody saved a newer version since the user last looked.
         check_version(document, expected_version)
-
-        # 3. Apply all the edits. If any fails, this raises and we never reach step 4.
-        new_text, applied = apply_changes(document["text"], changes)
-
-        # 4. Save the result as a new version, with who did it and what changed.
+        new_text, applied = apply_changes(document["text"], changes)  # raises before saving if any change fails
         _add_version(document, new_text, author, applied)
         return document, applied
 
@@ -146,14 +136,9 @@ def preview_changes(
                 "...governed by the laws of the State of <del>California,</del> <ins>Delaware,</ins>...",
                 [{"find": "State of California", "count": 1, ...}])
     """
-    # 1. Same checks as a real save: the document exists and is still the version the user saw.
     document = get_document(doc_id)
     check_version(document, expected_version)
-
-    # 2. Apply the changes to a copy of the text (the stored document is not modified).
     text_after, applied = apply_changes(document["text"], changes)
-
-    # 3. Build the inline redline for display (None if the document is huge).
     redline_markdown = build_redline(document["text"], text_after)
     return document, text_after, redline_markdown, applied
 
@@ -217,13 +202,9 @@ def _add_version(document: dict, new_text: str, author: str, applied: list[dict]
          "changes": [{"find": "Licensee", "replace": "Customer", "count": 24, "source": "human", ...}]}
     """
     timestamp = now()
-
-    # Update the "current" fields...
     document["version"] += 1
     document["text"] = new_text
     document["updated_at"] = timestamp
-
-    # ...and add an entry to the history (older versions are never changed).
     document["versions"].append(
         {
             "version": document["version"],
@@ -242,12 +223,10 @@ def title_from_text(text: str, fallback: str) -> str:
         title_from_text("# Mutual NDA\\n\\nBody...", "mutual-nda")  -> "Mutual NDA"
         title_from_text("No heading here", "vendor-terms")         -> "Vendor Terms"
     """
-    # Look for the first line that starts with "# " (a top-level Markdown heading).
     for line in text.splitlines():
         if line.startswith("# "):
             return line[2:].strip()
 
-    # No heading: tidy up the fallback ("vendor-terms" -> "Vendor Terms").
     return fallback.replace("-", " ").title()
 
 
@@ -259,6 +238,5 @@ def slugify(title: str) -> str:
         slugify("Vendor Agreement (Draft)")   -> "vendor-agreement-draft"
         slugify("!!!")                        -> "document"
     """
-    # Lowercase, turn every run of non-letters/digits into "-", trim "-" from the ends.
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug or "document"

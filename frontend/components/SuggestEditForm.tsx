@@ -84,21 +84,18 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
       return;
     }
 
-    // 1. Dry run: would this edit apply to the current document?
     setChecking(true);
     try {
       const result = await api.previewChanges(document.id, [request], document.version);
       const count = result.applied[0].count;
 
-      // 2. Changing every match? Show the count first, so nothing surprising happens.
+      // Changing every match: show the count first, so nothing surprising happens.
       if (request.target.occurrence === "all") {
         setCheck({ kind: "confirm-all", count });
         return;
       }
-      // 3. Otherwise it applies cleanly: add it to the pending list.
       onAdd(request);
     } catch (error) {
-      // 4. Ambiguous: offer the picker. Anything else: show the message.
       if (error instanceof ApiError && error.type === "ambiguous_match") {
         setCheck({
           kind: "ambiguous",

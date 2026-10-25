@@ -34,7 +34,6 @@ CLAUSE = (
 
 @pytest.fixture(scope="module")
 def big_text():
-    # 1. Repeat the clause until we reach ~10MB.
     pieces = []
     size = 0
     n = 1
@@ -44,7 +43,7 @@ def big_text():
         size += len(clause)
         n += 1
 
-    # 2. Plant one unique phrase near the end, so "find the needle" has to scan almost everything.
+    # A unique phrase near the end, so finding it means scanning almost everything.
     pieces.insert(len(pieces) - 5, f"{UNIQUE_PHRASE}.\n\n")
     return "".join(pieces)
 

@@ -132,7 +132,6 @@ function AiResultNote({ result, onDismiss }: { result: SuggestionsResponse; onDi
       </div>
 
       {droppedCount > 0 ? (
-        // The guardrail at work: suggestions whose text isn't in the document never reach the user.
         <details className="mt-2">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs">
             <ShieldCheck size={13} />

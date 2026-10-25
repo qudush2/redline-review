@@ -50,27 +50,22 @@ def search_documents(
          "snippet": "Intro line Limitation of Liability applies. liability again",
          "match_start": 25, "match_end": 34}   # snippet[25:34] == "Liability"
     """
-    # 1. Ignore stray spaces; refuse an empty search.
     query = query.strip()
     if not query:
         raise InvalidRequest("Enter some text to search for.")
 
-    # 2. Find every match position, document by document, in order.
-    #    Each entry is (document, position, "this is the Nth match in this document").
-    all_matches = []
+    # Collect positions only (cheap), so the total is exact; snippets and line
+    # numbers are built just for the requested page.
+    all_matches = []  # (document, position, nth match in that document)
     for document in documents:
-        # If the caller asked for specific documents, skip the rest.
         if document_ids is not None and document["id"] not in document_ids:
             continue
         positions = find_matches(document["text"], query, whole_word=whole_word, case_sensitive=False)
         for number, position in enumerate(positions, start=1):
             all_matches.append((document, position, number))
 
-    # 3. Keep only the requested page. With limit=10, offset=20 that's matches 21–30.
     page = all_matches[offset : offset + limit]
 
-    # 4. Build the display details (snippet, line number) only for that page.
-    #    Doing this for every match would waste time when there are thousands.
     results = []
     for document, position, number in page:
         text = document["text"]
@@ -80,14 +75,12 @@ def search_documents(
                 "document_id": document["id"],
                 "document_title": document["title"],
                 "position": position,
-                # Line number = how many newlines come before the match, plus 1.
                 "line": text.count("\n", 0, position) + 1,
                 "occurrence_in_document": number,
                 **snippet,  # adds "snippet", "match_start", "match_end"
             }
         )
 
-    # 5. Send back the page plus the info a UI needs for "Showing 1–10 of 42".
     return {
         "query": query,
         "total": len(all_matches),

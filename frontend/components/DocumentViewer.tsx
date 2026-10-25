@@ -36,10 +36,8 @@ export default function DocumentViewer(props: DocumentViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLElement>(null);
 
-  // A different document or version: forget any selection popup.
   useEffect(() => setPopup(null), [props.documentKey]);
 
-  // Highlight a search hit (or the text being edited) once the document's text is on screen.
   useEffect(() => {
     if (!props.highlight || !articleRef.current) {
       clearHighlight();
@@ -48,12 +46,10 @@ export default function DocumentViewer(props: DocumentViewerProps) {
     highlightMatch(articleRef.current, props.highlight.query, props.highlight.occurrence);
   }, [props.highlight, props.documentKey]);
 
-  // Clear the search highlight when leaving this screen.
   useEffect(() => clearHighlight, []);
 
   // After the user selects text in the contract, show a small "Suggest edit" button above it.
   function handleMouseUp() {
-    // 1. What did they select? Collapse line breaks and extra spaces into single spaces.
     const selection = window.getSelection();
     const text = selection?.toString().replace(/\s+/g, " ").trim() ?? "";
     if (!selection || !text || !scrollRef.current) {
@@ -61,8 +57,7 @@ export default function DocumentViewer(props: DocumentViewerProps) {
       return;
     }
 
-    // 2. Work out where the selection is, relative to the scrolling area, so the
-    //    button stays next to it while scrolling.
+    // Position relative to the scrolling area, so the button stays next to the text while scrolling.
     const selectionBox = selection.getRangeAt(0).getBoundingClientRect();
     const areaBox = scrollRef.current.getBoundingClientRect();
     setPopup({

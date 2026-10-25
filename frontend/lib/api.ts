@@ -103,7 +103,6 @@ export class ApiError extends Error {
 const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, options: RequestInit = {}, baseUrl = "/api"): Promise<T> {
-  // 1. Send the request. A thrown error here means the API isn't reachable at all.
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, options);
@@ -111,10 +110,8 @@ async function request<T>(path: string, options: RequestInit = {}, baseUrl = "/a
     throw new ApiError("Can't reach the API. Is the backend running?", 0, "network_error");
   }
 
-  // 2. Read the JSON body (errors have a JSON body too).
   const body = await response.json().catch(() => null);
 
-  // 3. Turn error responses into ApiError, using the API's own message.
   if (!response.ok) {
     throw new ApiError(
       body?.error ?? "Something went wrong. Please try again.",

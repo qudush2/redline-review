@@ -75,25 +75,20 @@ def apply_change(text: str, change: Change) -> tuple[str, dict]:
         apply_change(text, Change("Pay", "Remit", occurrence=5))
             -> raises OccurrenceOutOfRange   # there is only 1 "Pay"
     """
-    # 1. Find every place the target text appears.
     matches = find_matches(text, change.find, whole_word=change.whole_word)
     count = len(matches)
 
-    # 2. Not there at all: say so plainly. Never guess at a "close enough" match.
     if count == 0:
         raise TargetNotFound(
             f'Couldn\'t find "{change.find}" in this document.',
             {"find": change.find},
         )
 
-    # 3. Decide which matches to change, based on `occurrence`.
     if change.occurrence == "all":
-        # "all": every match (e.g. renaming a defined term everywhere).
         chosen = matches
     elif change.occurrence is None:
-        # No occurrence given: only OK if there's exactly one match.
-        # Editing the wrong clause is the worst failure, so we never pick for the user.
-        # Instead we send back a snippet of each match so the UI can ask "which one?".
+        # Editing the wrong clause is the worst failure, so we never pick for the
+        # user. The snippets let the UI ask "which one did you mean?".
         if count > 1:
             raise AmbiguousTarget(
                 f'"{change.find}" appears {count} times. Choose which one to change, or choose all.',
@@ -101,7 +96,6 @@ def apply_change(text: str, change: Change) -> tuple[str, dict]:
             )
         chosen = matches
     elif isinstance(change.occurrence, int):
-        # A number: that one match, counting from 1 (people say "the 2nd one", not "index 1").
         if change.occurrence < 1 or change.occurrence > count:
             raise OccurrenceOutOfRange(
                 f'"{change.find}" appears {count} time(s), so there is no occurrence {change.occurrence}.',
@@ -111,10 +105,7 @@ def apply_change(text: str, change: Change) -> tuple[str, dict]:
     else:
         raise InvalidRequest('Occurrence must be a number (1, 2, …) or "all".')
 
-    # 4. Swap in the new text at the chosen positions.
     new_text = replace_at(text, chosen, len(change.find), change.replace)
-
-    # 5. Report what happened (this goes into the version history).
     summary = {
         "find": change.find,
         "replace": change.replace,
@@ -149,17 +140,15 @@ def apply_changes(text: str, changes: list[Change]) -> tuple[str, list[dict]]:
     """
     current = text
     applied = []
-
-    # Go through the changes one by one, each working on the result of the last.
     for index, change in enumerate(changes):
         try:
             current, summary = apply_change(current, change)
         except AppError as error:
-            # Tag the error with which change failed, so the UI can point at the right card.
+            # Say which change failed, so the UI can point at the right card.
             error.details["change_index"] = index
             if len(changes) > 1:
                 error.message = f"Change {index + 1}: {error.message}"
-            raise  # stop here; nothing gets saved
+            raise
         applied.append(summary)
 
     return current, applied
@@ -182,19 +171,12 @@ def replace_at(text: str, positions: list[int], length: int, replacement: str) -
             -> r"path: C:\new"   # the backslash is kept as-is (a regex would treat "\n" specially)
     """
     pieces = []
-    last_end = 0  # where the previous replaced chunk ended
-
+    last_end = 0
     for start in positions:
-        # Keep the untouched text between the previous match and this one...
         pieces.append(text[last_end:start])
-        # ...then put the replacement where the match was.
         pieces.append(replacement)
         last_end = start + length
-
-    # Keep whatever comes after the last match.
     pieces.append(text[last_end:])
-
-    # Joining once at the end is much faster than adding strings in the loop.
     return "".join(pieces)
 
 
@@ -208,9 +190,9 @@ def describe_matches(text: str, find: str, positions: list[int]) -> list[dict]:
                  {"occurrence": 2, "snippet": "Pay in thirty days. Notice: thirty days.", "match_start": 28, "match_end": 34},
                ]
     """
+    # Capped, so a word that appears 500 times doesn't produce a huge error
+    # response. The full count is sent separately.
     examples = []
-    # Only the first MAX_AMBIGUOUS_EXAMPLES, so a word that appears 500 times
-    # doesn't produce a huge error response. The full count is sent separately.
     for number, start in enumerate(positions[:MAX_AMBIGUOUS_EXAMPLES], start=1):
         snippet = make_snippet(text, start, start + len(find), radius=60)
         examples.append({"occurrence": number, **snippet})
@@ -238,54 +220,37 @@ def build_redline(before: str, after: str) -> str | None:
             -> '(**"<del>Licensee</del><ins>Customer</ins>"**)'
                # the ** bold markers stay outside the tags
     """
-    # 1. Very large documents: skip (the comparison gets slow). The UI falls back to change cards.
     if len(before) > MAX_REDLINE_CHARS or len(after) > MAX_REDLINE_CHARS:
         return None
 
-    # 2. Split both texts into tokens. Each token is a word plus the whitespace after it:
-    #       "upon thirty (30) days" -> ["upon ", "thirty ", "(30) ", "days"]
-    #    Keeping the space attached means "thirty (30)" -> "sixty (60)" shows as ONE
-    #    edit, not two edits split by an "unchanged" space.
-    #    (The "|\s+" part catches whitespace at the very start of the text.)
+    # Each token is a word plus the whitespace after it: "upon thirty (30)" ->
+    # ["upon ", "thirty ", "(30)"]. Keeping the space attached makes
+    # "thirty (30)" -> "sixty (60)" one edit instead of two split by a space.
     old_tokens = re.findall(r"\S+\s*|\s+", before)
     new_tokens = re.findall(r"\S+\s*|\s+", after)
 
-    # 3. Let Python's difflib line up the two token lists. get_opcodes() returns steps like:
-    #       ("equal",   0, 1, 0, 1)  -> old_tokens[0:1] and new_tokens[0:1] are the same
-    #       ("replace", 1, 3, 1, 3)  -> old_tokens[1:3] became new_tokens[1:3]
-    #       ("delete",  ...)         -> tokens only in the old text
-    #       ("insert",  ...)         -> tokens only in the new text
-    #    autojunk=False stops difflib from ignoring common words like "the".
+    # autojunk=False stops difflib from ignoring common words like "the".
     matcher = difflib.SequenceMatcher(None, old_tokens, new_tokens, autojunk=False)
 
-    # 4. Walk through the steps and build the marked-up text.
     pieces = []
     for operation, old_start, old_end, new_start, new_end in matcher.get_opcodes():
         old_chunk = "".join(old_tokens[old_start:old_end])
         new_chunk = "".join(new_tokens[new_start:new_end])
 
         if operation == "equal":
-            # Unchanged text goes in as-is.
             pieces.append(old_chunk)
         elif operation == "delete":
-            # Removed text gets struck through.
             pieces.append(wrap_in_tag("del", old_chunk))
         elif operation == "insert":
-            # New text gets underlined.
             pieces.append(wrap_in_tag("ins", new_chunk))
         else:
-            # "replace": show the old text struck through, then the new text.
-            # a) Whitespace that ends BOTH chunks (a space, or a paragraph break) goes
-            #    after the whole edit. Left in place, a paragraph break at the end of a
-            #    clause would land between <del> and <ins> and push the new text into a
-            #    paragraph of its own.
+            # Whitespace that ends both chunks (often a paragraph break) goes after
+            # the whole edit; between <del> and <ins> it would split the paragraph.
             old_core, new_core, tail = old_chunk, new_chunk, ""
             old_tail = old_chunk[len(old_chunk.rstrip()) :]
             if old_tail and old_tail == new_chunk[len(new_chunk.rstrip()) :]:
                 old_core, new_core, tail = old_chunk.rstrip(), new_chunk.rstrip(), old_tail
-            # b) Shared bold/italic markers are kept outside the tags (see below).
             prefix, old_core, new_core, suffix = split_shared_formatting(old_core, new_core)
-            # c) One space between the deletion and the insertion, like Word's track changes.
             separator = " " if tail else ""
             pieces.append(
                 prefix + wrap_in_tag("del", old_core) + separator + wrap_in_tag("ins", new_core) + suffix + tail
@@ -314,19 +279,15 @@ def split_shared_formatting(old: str, new: str) -> tuple[str, str, str, str]:
     """
     shortest = min(len(old), len(new))
 
-    # 1. Count shared characters at the START that aren't letters/digits.
-    #    '(**"Licensee' vs '(**"Customer' -> '(', '*', '*', '"' match -> start = 4
+    # Count shared non-letter characters at each end, e.g. '(**"' and '"**)'.
     start = 0
     while start < shortest and old[start] == new[start] and not old[start].isalnum():
         start += 1
 
-    # 2. Count shared characters at the END the same way, without overlapping the start.
-    #    'Licensee"**)' vs 'Customer"**)' -> '"', '*', '*', ')' match -> end = 4
     end = 0
     while end < shortest - start and old[-1 - end] == new[-1 - end] and not old[-1 - end].isalnum():
         end += 1
 
-    # 3. Only peel those edges off if they actually contain a formatting marker.
     prefix = old[:start]
     suffix = old[len(old) - end :]
     if not any(marker in prefix for marker in MARKDOWN_MARKERS):
@@ -334,7 +295,6 @@ def split_shared_formatting(old: str, new: str) -> tuple[str, str, str, str]:
     if not any(marker in suffix for marker in MARKDOWN_MARKERS):
         suffix, end = "", 0
 
-    # 4. Return: shared prefix, old middle, new middle, shared suffix.
     return prefix, old[start : len(old) - end], new[start : len(new) - end], suffix
 
 
@@ -356,15 +316,10 @@ def wrap_in_tag(tag: str, chunk: str) -> str:
             -> "\\n"                                  # only whitespace: no tag
     """
     pieces = []
-
-    # Split on runs of newlines, keeping the newlines: "a\n\nb" -> ["a", "\n\n", "b"].
-    for part in re.split(r"(\n+)", chunk):
-        # Newlines or bare spaces: keep them, but don't wrap them in a tag.
+    for part in re.split(r"(\n+)", chunk):  # "a\n\nb" -> ["a", "\n\n", "b"]
         if part.strip() == "":
             pieces.append(part)
             continue
-
-        # Text: wrap the words, leave any spaces at either edge outside the tag.
         words = part.strip()
         leading = part[: len(part) - len(part.lstrip())]
         trailing = part[len(part.rstrip()) :]

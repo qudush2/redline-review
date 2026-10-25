@@ -30,7 +30,6 @@ export default function ComingSoon({ children, label = "Not in this prototype", 
         {children}
       </span>
 
-      {/* Tooltip, shown on hover. */}
       <span
         role="tooltip"
         className={`pointer-events-none invisible absolute z-50 whitespace-nowrap rounded-md bg-espresso px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover/soon:visible group-hover/soon:opacity-100 ${tooltipPosition[side]}`}

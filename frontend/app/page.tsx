@@ -124,7 +124,6 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Whenever the open document changes, load its text and history.
   useEffect(() => {
     if (!activeId) return;
     setDocument(null);
@@ -139,7 +138,7 @@ export default function Home() {
     try {
       localStorage.setItem(EDITOR_NAME_KEY, name);
     } catch {
-      // Not critical if it can't be saved.
+      // Storage can be blocked; the name just won't be remembered.
     }
   }
 
@@ -153,9 +152,8 @@ export default function Home() {
     const doc = document;
 
     async function runPreview() {
-      // If one change no longer applies, the whole preview fails (it's all-or-nothing).
-      // So we drop the failing change, remember its error for its card, and try again
-      // with the rest. The loop runs at most once per change.
+      // The preview is all-or-nothing, so if one change no longer applies we set it
+      // aside (its card shows the error) and retry with the rest.
       let candidates = pending;
       const errors: Record<string, string> = {};
 
@@ -181,7 +179,6 @@ export default function Home() {
             break;
           }
           const failing = candidates[index];
-          // The API says "Change 2: …" for multi-change requests. The card already shows which one.
           errors[failing.id] = (error as ApiError).message.replace(/^Change \d+: /, "");
           candidates = candidates.filter((c) => c.id !== failing.id);
         }
@@ -192,7 +189,6 @@ export default function Home() {
     runPreview();
   }, [document, pending, showError]);
 
-  // Combine each pending change with what the preview said about it (count or error).
   const pendingViews: PendingChangeView[] = pending.map((change) => {
     const previewIndex = previewIds.indexOf(change.id);
     return {
@@ -218,9 +214,7 @@ export default function Home() {
     setHighlight(null);
   }
 
-  // While typing in the edit form, highlight the first match in the document.
-  // useCallback keeps this function the same between renders, so the form's
-  // "highlight after a pause" timer isn't restarted on every render.
+  // Stable between renders (useCallback), so the form's debounce timer isn't reset each render.
   const highlightFindText = useCallback((text: string) => {
     setHighlight(text ? { query: text, occurrence: 1, key: Date.now() } : null);
   }, []);
@@ -276,7 +270,6 @@ export default function Home() {
     setAiBusy(true);
     try {
       const result = await api.suggestEdits(document.id, instruction);
-      // The server already dropped any suggestion whose text isn't in the document.
       const newChanges = result.suggestions.map((request) => makePendingChange(request, "Redline AI"));
       setPendingForActive((current) => [...current, ...newChanges]);
       setAiResult(result);

@@ -11,7 +11,8 @@ from app.errors import InvalidRequest
 def find_matches(text: str, find: str, whole_word: bool = True, case_sensitive: bool = True) -> list[int]:
     """Return the start position of every match of `find` in `text`, in order.
 
-    Positions are character offsets, counting from 0.
+    Positions are character offsets, counting from 0. One linear pass with a
+    regex; the user's text is escaped, so "(30)" or "$5.00" match literally.
 
     Examples:
         find_matches("a cat and a cat", "cat")
@@ -35,31 +36,22 @@ def find_matches(text: str, find: str, whole_word: bool = True, case_sensitive: 
         find_matches("anything", "")
             -> raises InvalidRequest
     """
-    # 1. An empty search would "match" everywhere, so refuse it.
     if not find:
         raise InvalidRequest("The text to find can't be empty.")
 
-    # 2. Turn the user's text into a regex pattern. re.escape makes special
-    #    characters literal: "(30)" becomes "\(30\)", "$5.00" becomes "\$5\.00".
     pattern = re.escape(find)
 
-    # 3. Whole-word rule: no letter, digit, or underscore may touch the match.
-    #    (?<!\w) means "the character before is not a word character".
-    #    (?!\w)  means "the character after is not a word character".
-    #    So "Licensee" can't match inside "Sublicensee" or "Licensees".
-    #    We only add a check on a side that is itself a letter or digit. That way
-    #    "(a)" still matches in "1(a)": its edges are punctuation, not words.
-    #    (We avoid \b because it behaves oddly next to punctuation.)
+    # Whole word: no letter or digit may touch the match, so "Licensee" can't
+    # match inside "Sublicensee". The check is only added on an edge that is
+    # itself a word character, so "(a)" still matches in "1(a)". (\b behaves
+    # oddly next to punctuation, so we use lookarounds instead.)
     if whole_word:
         if re.match(r"\w", find[0]):
             pattern = r"(?<!\w)" + pattern
         if re.match(r"\w", find[-1]):
             pattern = pattern + r"(?!\w)"
 
-    # 4. Case-sensitive unless asked otherwise ("Company" is not "company").
     flags = 0 if case_sensitive else re.IGNORECASE
-
-    # 5. One pass over the text; collect where each match starts.
     return [match.start() for match in re.finditer(pattern, text, flags)]
 
 
@@ -83,21 +75,14 @@ def make_snippet(text: str, start: int, end: int, radius: int = 80) -> dict:
             -> {"snippet": "line one MATCH here", ...}
                # the newline becomes a space so it reads as one line
     """
-    # 1. Pick the window: `radius` characters on each side of the match,
-    #    without running past the start or end of the text.
     snippet_start = max(0, start - radius)
     snippet_end = min(len(text), end + radius)
 
-    # 2. Cut it out. Newlines become spaces so the snippet reads as one line.
-    #    A newline and a space are both 1 character, so offsets still line up.
+    # A newline and a space are both one character, so offsets still line up.
     body = text[snippet_start:snippet_end].replace("\n", " ")
-
-    # 3. Add "…" on a side only if we actually cut text off on that side.
     prefix = "…" if snippet_start > 0 else ""
     suffix = "…" if snippet_end < len(text) else ""
 
-    # 4. Work out where the match sits inside the final snippet string.
-    #    Shift by the "…" we may have added at the front.
     return {
         "snippet": prefix + body + suffix,
         "match_start": len(prefix) + (start - snippet_start),

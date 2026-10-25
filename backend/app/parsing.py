@@ -39,8 +39,6 @@ def parse_upload(filename: str, data: bytes) -> tuple[str, str]:
         parse_upload("huge.txt", <25MB>)    -> raises TooLarge (413)
         parse_upload("empty.txt", b"")      -> raises InvalidRequest (400)
     """
-    # 1. Only accept file types we know how to read. Check the extension, lowercased
-    #    so "MSA.DOCX" works too.
     extension = Path(filename).suffix.lower()
     if extension not in SUPPORTED_TYPES:
         raise UnsupportedFileType(
@@ -49,7 +47,6 @@ def parse_upload(filename: str, data: bytes) -> tuple[str, str]:
         )
     file_type = SUPPORTED_TYPES[extension]
 
-    # 2. Refuse files that are too big or empty.
     if len(data) > MAX_UPLOAD_BYTES:
         raise TooLarge(
             "That file is larger than 20MB. Try splitting it, or upload the main agreement on its own.",
@@ -58,18 +55,13 @@ def parse_upload(filename: str, data: bytes) -> tuple[str, str]:
     if not data:
         raise InvalidRequest("That file is empty.")
 
-    # 3. Convert to text. Plain text and Markdown just need decoding; Word needs converting.
-    #    errors="replace" means a stray invalid byte becomes "�" instead of failing the upload.
     if file_type == "docx":
         text = docx_to_markdown(data)
     else:
-        text = data.decode("utf-8", errors="replace")
+        text = data.decode("utf-8", errors="replace")  # a stray bad byte becomes "�", not a failed upload
 
-    # 4. Use "\n" line endings everywhere (Windows files use "\r\n"), so search
-    #    and line numbers behave the same for every file.
+    # Windows line endings would throw off search and line numbers.
     text = text.replace("\r\n", "\n")
-
-    # 5. A file with no readable text (e.g. only images) isn't useful here.
     if not text.strip():
         raise InvalidRequest("We couldn't find any text in that file.")
 
@@ -81,20 +73,18 @@ def docx_to_markdown(data: bytes) -> str:
 
     Example: a Word heading "Payment" becomes "# Payment", bold text becomes **bold**.
     """
-    # 1. Every real .docx is a zip archive. If this one isn't, it's damaged or
-    #    mislabeled. (Without this check, markitdown quietly imports the raw bytes as text.)
+    # Every real .docx is a zip archive. Without this check, markitdown quietly
+    # imports a damaged or mislabeled file's raw bytes as text.
     if not zipfile.is_zipfile(io.BytesIO(data)):
         raise InvalidRequest("We couldn't read that .docx file. It may be damaged.")
 
-    # 2. markitdown reads from a file path, so write the bytes to a temporary file.
-    # The temporary folder (and file) is deleted automatically when the `with` block ends.
+    # markitdown reads from a path; the temporary folder is deleted when the block ends.
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "upload.docx"
         path.write_bytes(data)
         try:
             result = MarkItDown().convert(str(path))
         except Exception as error:
-            # A corrupted or mislabeled file. Tell the user plainly rather than returning a 500.
             raise InvalidRequest("We couldn't read that .docx file. It may be damaged.") from error
     return result.text_content
 

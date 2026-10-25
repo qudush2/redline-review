@@ -26,15 +26,12 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 DEFAULT_MODEL = "claude-sonnet-5-5"
 PLACEHOLDER_KEY_PREFIX = "sk-ant-placeholder"
 
-# Above this size we don't send the document to the AI in this version.
-# (Next step: split long contracts into sections and review each one.)
+# Above this size we don't send the document to the AI (next step: review long contracts by section).
 MAX_AI_CHARS = 150_000
 
-# The exact JSON shape the AI must reply with. Structured outputs make the API
-# guarantee this shape, so we never have to parse free-form text.
-# Example reply:
-#   {"changes": [{"find": "State of California", "replace": "State of Delaware",
-#                 "reason": "Playbook: governing law must be Delaware."}]}
+# The JSON shape the AI must reply with; structured outputs make the API guarantee it.
+# Example: {"changes": [{"find": "State of California", "replace": "State of Delaware",
+#                         "reason": "Playbook: governing law must be Delaware."}]}
 SUGGESTIONS_SCHEMA = {
     "type": "object",
     "properties": {
@@ -86,17 +83,13 @@ def suggest_changes(document_text: str, instruction: str, playbook: str) -> dict
             "dropped": [{"find": "State of Nevada", "why": "This text isn't in the document."}],
             "model": "claude-sonnet-5-5"}
     """
-    # 1. Keep the request within what this version supports.
     if len(document_text) > MAX_AI_CHARS:
         raise TooLarge(
             "This document is too large for AI suggestions in this version.",
             {"size_chars": len(document_text), "max_chars": MAX_AI_CHARS},
         )
 
-    # 2. Ask the AI. (Raises a friendly error if no key is set or the call fails.)
     raw_changes, model = ask_claude(document_text, instruction, playbook)
-
-    # 3. The guardrail: check every suggestion against the real text.
     suggestions, dropped = validate_suggestions(document_text, raw_changes)
     return {"suggestions": suggestions, "dropped": dropped, "model": model}
 
@@ -126,13 +119,11 @@ def validate_suggestions(document_text: str, raw_changes: list[dict]) -> tuple[l
         replace = raw.get("replace", "")
         reason = raw.get("reason", "")
 
-        # A "change" that changes nothing isn't worth a lawyer's time.
         if not find or find == replace:
             dropped.append({"find": find, "why": "The suggestion doesn't change anything."})
             continue
 
-        # Try it for real. occurrence=None means it must match exactly once.
-        # Whole-word matching, same as human edits: "Term" can't match inside "Termination".
+        # Same rules as a human edit: must match exactly once, whole words only.
         change = Change(find=find, replace=replace, occurrence=None, whole_word=True, reason=reason, source="ai")
         try:
             current_text, summary = apply_change(current_text, change)
@@ -140,7 +131,6 @@ def validate_suggestions(document_text: str, raw_changes: list[dict]) -> tuple[l
             dropped.append({"find": find, "why": why_dropped(error)})
             continue
 
-        # It applies cleanly: return it in the same shape a human edit uses.
         kept.append(
             {
                 "operation": "replace",
@@ -168,14 +158,11 @@ def ask_claude(document_text: str, instruction: str, playbook: str) -> tuple[lis
 
     Kept small and separate so tests can swap it for a fake.
     """
-    # 1. Make sure a real API key is configured.
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key or api_key.startswith(PLACEHOLDER_KEY_PREFIX):
         raise AINotConfigured("AI suggestions aren't set up yet. Add ANTHROPIC_API_KEY to backend/.env.")
     model = os.environ.get("ANTHROPIC_MODEL") or DEFAULT_MODEL
 
-    # 2. Build the request: the playbook goes in the system prompt (same every time),
-    #    the contract and the instruction go in the user message.
     user_message = (
         f"<contract>\n{document_text}\n</contract>\n\n"
         f"<instruction>\n{instruction}\n</instruction>\n\n"
@@ -183,10 +170,8 @@ def ask_claude(document_text: str, instruction: str, playbook: str) -> tuple[lis
     )
     system = f"{SYSTEM_PROMPT}\n\n<playbook>\n{playbook}\n</playbook>"
 
-    # 3. Call the API.
-    #    - output_config.format: the reply must match SUGGESTIONS_SCHEMA (valid JSON, guaranteed).
-    #    - fallbacks="default": if the model's safety filters decline, the API retries
-    #      on a fallback model in the same call instead of failing.
+    # output_config.format guarantees JSON matching SUGGESTIONS_SCHEMA.
+    # fallbacks="default": if the model declines, the API retries on a fallback model.
     client = anthropic.Anthropic(api_key=api_key)
     try:
         response = client.beta.messages.create(
@@ -205,12 +190,10 @@ def ask_claude(document_text: str, instruction: str, playbook: str) -> tuple[lis
     except (anthropic.APIStatusError, anthropic.APIConnectionError) as error:
         raise AIServiceError("The AI service didn't respond. Try again.") from error
 
-    # 4. Check why the model stopped before reading the answer.
     if response.stop_reason == "refusal":
         raise AIServiceError("The AI declined to review this document.")
     if response.stop_reason == "max_tokens":
         raise AIServiceError("The AI's answer was cut off. Try a narrower instruction.")
 
-    # 5. Read the JSON reply (structured outputs guarantee it parses).
     text = next(block.text for block in response.content if block.type == "text")
     return json.loads(text)["changes"], response.model

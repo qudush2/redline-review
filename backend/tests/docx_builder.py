@@ -46,7 +46,6 @@ WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 def build_docx(blocks: list[tuple]) -> bytes:
     """Return .docx bytes. Each block is ("heading", text) or ("paragraph", [(text, is_bold), ...])."""
-    # 1. Turn each block into a Word paragraph (<w:p>).
     paragraphs = []
     for kind, content in blocks:
         if kind == "heading":
@@ -58,7 +57,7 @@ def build_docx(blocks: list[tuple]) -> bytes:
     body = "".join(paragraphs)
     document = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{WORD_NAMESPACE}"><w:body>{body}</w:body></w:document>'
 
-    # 2. Zip all the parts together. That zip IS the .docx file.
+    # The zip of these parts is the .docx file.
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("[Content_Types].xml", CONTENT_TYPES)

@@ -15,16 +15,14 @@ export function highlightMatch(container: HTMLElement, query: string, occurrence
   const needle = query.toLowerCase();
   let seen = 0;
 
-  // 1. Walk through every piece of text in the document, in reading order.
+  // Walk every text node in reading order, counting matches until we reach the Nth.
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
   let node = walker.nextNode();
   while (node) {
-    // 2. Look for the query inside this piece of text, possibly more than once.
     const text = (node.textContent ?? "").toLowerCase();
     let index = text.indexOf(needle);
     while (index !== -1) {
       seen += 1;
-      // 3. Is this the one we want? Highlight it and scroll it into view.
       if (seen === occurrence) {
         const range = new Range();
         range.setStart(node, index);
