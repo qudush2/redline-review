@@ -171,17 +171,14 @@ def ask_claude(document_text: str, instruction: str, playbook: str) -> tuple[lis
     system = f"{SYSTEM_PROMPT}\n\n<playbook>\n{playbook}\n</playbook>"
 
     # output_config.format guarantees JSON matching SUGGESTIONS_SCHEMA.
-    # fallbacks="default": if the model declines, the API retries on a fallback model.
     client = anthropic.Anthropic(api_key=api_key)
     try:
-        response = client.beta.messages.create(
+        response = client.messages.create(
             model=model,
             max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": user_message}],
             output_config={"format": {"type": "json_schema", "schema": SUGGESTIONS_SCHEMA}},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
         )
     except anthropic.AuthenticationError as error:
         raise AINotConfigured("The API key in backend/.env was rejected. Check that it's correct.") from error

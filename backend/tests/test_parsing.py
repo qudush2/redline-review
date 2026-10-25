@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pytest
 
 from app.errors import InvalidRequest, TooLarge, UnsupportedFileType
 from app.parsing import MAX_UPLOAD_BYTES, parse_upload, title_from_filename
-from tests.docx_builder import build_docx
+
+# A real Word file, also used for the demo upload.
+SAMPLE_DOCX = Path(__file__).resolve().parents[2] / "samples" / "sample-vendor-agreement.docx"
 
 
 def test_txt_is_decoded_as_utf8():
@@ -20,14 +24,10 @@ def test_extension_check_ignores_case():
 
 
 def test_docx_is_converted_to_markdown_with_headings_and_bold():
-    data = build_docx([
-        ("heading", "Vendor Agreement"),
-        ("paragraph", [("1. Payment. ", True), ("Fees are due Net 45.", False)]),
-    ])
-    text, file_type = parse_upload("vendor.docx", data)
+    text, file_type = parse_upload("vendor.docx", SAMPLE_DOCX.read_bytes())
     assert file_type == "docx"
     assert "# Vendor Agreement" in text
-    assert "**1. Payment.** Fees are due Net 45." in text
+    assert "**1. Payment.** Company shall pay each undisputed invoice" in text
 
 
 def test_damaged_docx_gives_a_friendly_error():

@@ -9,7 +9,7 @@
 //   3. Accept sends PATCH with that one change; Accept all sends them all.
 //   4. Reject just removes it from the list.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
 
 import AppNav from "@/components/AppNav";
@@ -144,11 +144,8 @@ export default function Home() {
 
   // --- Preview: re-run whenever the document or its pending list changes ---------------
 
-  const previewRun = useRef(0); // lets us ignore answers from older, slower preview calls
-
   useEffect(() => {
     if (!document) return;
-    const runId = ++previewRun.current;
     const doc = document;
 
     async function runPreview() {
@@ -159,23 +156,19 @@ export default function Home() {
 
       for (let attempt = 0; attempt <= pending.length; attempt++) {
         if (candidates.length === 0) {
-          if (runId === previewRun.current) {
-            setPreview(null);
-            setPreviewIds([]);
-          }
+          setPreview(null);
+          setPreviewIds([]);
           break;
         }
         try {
           const result = await api.previewChanges(doc.id, candidates.map((c) => c.request), doc.version);
-          if (runId === previewRun.current) {
-            setPreview(result);
-            setPreviewIds(candidates.map((c) => c.id));
-          }
+          setPreview(result);
+          setPreviewIds(candidates.map((c) => c.id));
           break;
         } catch (error) {
           const index = error instanceof ApiError ? error.details.change_index : undefined;
           if (typeof index !== "number") {
-            if (runId === previewRun.current) showError(error);
+            showError(error);
             break;
           }
           const failing = candidates[index];
@@ -183,7 +176,7 @@ export default function Home() {
           candidates = candidates.filter((c) => c.id !== failing.id);
         }
       }
-      if (runId === previewRun.current) setChangeErrors(errors);
+      setChangeErrors(errors);
     }
 
     runPreview();

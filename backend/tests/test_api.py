@@ -1,13 +1,15 @@
 """End-to-end tests through HTTP, using FastAPI's TestClient (no real server needed)."""
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app import store
 from app.main import app
-from tests.docx_builder import build_docx
 
 MSA = "master-services-agreement"
+SAMPLE_DOCX = Path(__file__).resolve().parents[2] / "samples" / "sample-vendor-agreement.docx"
 
 # raise_server_exceptions=False lets us test the 500 handler instead of the test crashing.
 client = TestClient(app, raise_server_exceptions=False)
@@ -218,10 +220,9 @@ def test_upload_txt():
 
 
 def test_upload_docx_with_custom_title():
-    data = build_docx([("heading", "Vendor Agreement"), ("paragraph", [("Net 45.", False)])])
     response = client.post(
         "/documents/upload",
-        files={"file": ("vendor.docx", data, "application/octet-stream")},
+        files={"file": ("vendor.docx", SAMPLE_DOCX.read_bytes(), "application/octet-stream")},
         data={"title": "Blue Heron Vendor Agreement"},
     )
     assert response.status_code == 201

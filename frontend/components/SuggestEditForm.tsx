@@ -51,12 +51,9 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
   }, [find, initialFind, onFindTextChange]);
 
   // Editing any field makes the last check out of date.
-  function edit<T>(setter: (value: T) => void) {
-    return (value: T) => {
-      setter(value);
-      setCheck(null);
-    };
-  }
+  useEffect(() => {
+    setCheck(null);
+  }, [find, replacement, occurrenceMode, occurrenceNumber, wholeWord]);
 
   function buildRequest(occurrence: Occurrence): ChangeRequest {
     return {
@@ -140,7 +137,7 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
         <Field label={isRename ? "Current term" : "Find (exact text)"} hint="The first match is highlighted in the document.">
           <textarea
             value={find}
-            onChange={(event) => edit(setFind)(event.target.value)}
+            onChange={(event) => setFind(event.target.value)}
             rows={2}
             required
             autoFocus={!initialFind}
@@ -152,7 +149,7 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
         <Field label={isRename ? "New term" : "Replace with"} hint="Leave empty to delete the text.">
           <textarea
             value={replacement}
-            onChange={(event) => edit(setReplacement)(event.target.value)}
+            onChange={(event) => setReplacement(event.target.value)}
             rows={2}
             autoFocus={Boolean(initialFind)}
             placeholder={isRename ? "Customer" : "sixty (60) days"}
@@ -167,7 +164,7 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
                 <button
                   key={option}
                   type="button"
-                  onClick={() => edit(setOccurrenceMode)(option)}
+                  onClick={() => setOccurrenceMode(option)}
                   className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
                     occurrenceMode === option ? "border-rust bg-clay text-rust" : "border-line bg-white hover:bg-subtle"
                   }`}
@@ -180,7 +177,7 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
                   type="number"
                   min={1}
                   value={occurrenceNumber}
-                  onChange={(event) => edit(setOccurrenceNumber)(Math.max(1, Number(event.target.value)))}
+                  onChange={(event) => setOccurrenceNumber(Math.max(1, Number(event.target.value)))}
                   className={`${inputClass} w-16 py-1`}
                 />
               ) : null}
@@ -190,7 +187,7 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
 
         <label className="flex flex-col gap-0.5 text-xs">
           <span className="flex items-center gap-2">
-            <input type="checkbox" checked={wholeWord} onChange={(event) => edit(setWholeWord)(event.target.checked)} className="accent-rust" />
+            <input type="checkbox" checked={wholeWord} onChange={(event) => setWholeWord(event.target.checked)} className="accent-rust" />
             Whole words only
           </span>
           <span className="pl-5 text-[11px] text-ink-faint">“Term” won’t match inside “Termination”.</span>

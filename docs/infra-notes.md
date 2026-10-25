@@ -33,7 +33,8 @@ Running notes on what would change to take this from a local prototype to produc
 - **Chunking** for contracts over the current 150k-character cap: review by section, then merge and re-validate the suggestions.
 - **Rate limits and cost caps** per tenant; log tokens per request.
 - **Audit:** log the prompt, model, and raw output with each suggestion, alongside whether it was kept or dropped and who accepted it.
-- **Keep:** the deterministic guardrail (apply every suggestion to the real text before showing it) and the server-side refusal fallback.
+- **Refusal fallback:** if the model's safety filters decline a contract, retry on a fallback model instead of failing the review.
+- **Keep:** the deterministic guardrail (apply every suggestion to the real text before showing it).
 
 ## Security and compliance
 
