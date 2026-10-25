@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { Clock, Download, FileText, Send, UserPen } from "lucide-react";
-import { toast } from "sonner";
+import ComingSoon from "./ComingSoon";
 import type { DocumentFull } from "@/lib/api";
 import { fileTypeLabel, timeAgo } from "@/lib/format";
 
-const tabs = ["Document", "Details", "Activity", "Approvals"];
+// Only "Document" is built; the other tabs are placeholders.
+const placeholderTabs = ["Details", "Activity", "Approvals"];
 
 type HeaderProps = {
   document: DocumentFull;
@@ -16,10 +16,8 @@ type HeaderProps = {
 };
 
 // Document header: title, version, who is editing, and page tabs.
-// Only the "Document" tab is built; the others (and Export/Send) are placeholders.
+// Placeholders (other tabs, Export, Send) are grayed out with ComingSoon.
 export default function Header({ document, pendingCount, editorName, onEditorNameChange }: HeaderProps) {
-  const [activeTab, setActiveTab] = useState("Document");
-
   return (
     <div className="shrink-0 border-b border-line bg-surface px-6 pt-5">
       <div className="flex items-start justify-between gap-6">
@@ -59,32 +57,25 @@ export default function Header({ document, pendingCount, editorName, onEditorNam
             <span className="font-semibold text-rust">{pendingCount}</span> pending{" "}
             {pendingCount === 1 ? "change" : "changes"}
           </span>
-          <button
-            onClick={() => toast.info("Export to Word with tracked changes is next on the roadmap.")}
-            className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium hover:bg-subtle"
-          >
-            <Download size={15} /> Export .docx
-          </button>
-          <button
-            onClick={() => toast.info("Sending to the counterparty isn't part of this demo.")}
-            className="flex items-center gap-1.5 rounded-lg bg-rust px-3 py-1.5 text-sm font-medium text-white hover:bg-rust-dark"
-          >
-            <Send size={15} /> Send to counterparty
-          </button>
+          <ComingSoon label="Next on the roadmap: export to Word with tracked changes">
+            <span className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium">
+              <Download size={15} /> Export .docx
+            </span>
+          </ComingSoon>
+          <ComingSoon>
+            <span className="flex items-center gap-1.5 rounded-lg bg-rust px-3 py-1.5 text-sm font-medium text-white">
+              <Send size={15} /> Send to counterparty
+            </span>
+          </ComingSoon>
         </div>
       </div>
 
       <div className="mt-4 flex gap-6 text-sm">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`border-b-2 pb-2.5 font-medium transition-colors ${
-              tab === activeTab ? "border-rust text-ink" : "border-transparent text-ink-muted hover:text-ink"
-            }`}
-          >
-            {tab}
-          </button>
+        <span className="border-b-2 border-rust pb-2.5 font-medium text-ink">Document</span>
+        {placeholderTabs.map((tab) => (
+          <ComingSoon key={tab}>
+            <span className="border-b-2 border-transparent pb-2.5 font-medium text-ink-muted">{tab}</span>
+          </ComingSoon>
         ))}
       </div>
     </div>

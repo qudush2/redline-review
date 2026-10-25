@@ -9,9 +9,10 @@ import {
   PenLine,
   Settings,
 } from "lucide-react";
+import ComingSoon from "./ComingSoon";
 
-// Left navigation rail. Only "Contracts" is real; the rest show where
-// this screen would sit inside a full legal workspace.
+// Left navigation rail. Only "Contracts" is real; the rest are grayed out.
+// They show where this screen would sit inside a full legal workspace.
 const mainItems = [
   { label: "Home", icon: House },
   { label: "Matters", icon: Briefcase },
@@ -36,7 +37,13 @@ export default function AppNav() {
       <ul className="flex flex-1 flex-col gap-1">
         {mainItems.map((item) => (
           <li key={item.label}>
-            <NavButton {...item} />
+            {item.active ? (
+              <NavButton {...item} />
+            ) : (
+              <ComingSoon side="right">
+                <NavButton {...item} />
+              </ComingSoon>
+            )}
           </li>
         ))}
       </ul>
@@ -44,7 +51,9 @@ export default function AppNav() {
       <ul className="flex flex-col gap-1">
         {footerItems.map((item) => (
           <li key={item.label}>
-            <NavButton {...item} />
+            <ComingSoon side="right">
+              <NavButton {...item} />
+            </ComingSoon>
           </li>
         ))}
       </ul>

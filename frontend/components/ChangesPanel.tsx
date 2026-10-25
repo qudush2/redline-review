@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowUp, CheckCheck, PencilLine, Replace, Sparkles } from "lucide-react";
 import ChangeCard from "./ChangeCard";
+import ComingSoon from "./ComingSoon";
 import type { HistoryEntry } from "@/lib/api";
 import { occurrenceLabel, timeAgo } from "@/lib/format";
 import type { PendingChangeView } from "@/lib/pending";
@@ -40,7 +41,10 @@ export default function ChangesPanel(props: ChangesPanelProps) {
         {tab === "pending" ? <PendingList {...props} /> : <HistoryList entries={props.history} />}
       </div>
 
-      <AskAiBox onAskAi={props.onAskAi} />
+      {/* Grayed out until AI suggestions are wired up (Phase 4). */}
+      <ComingSoon side="top" label="AI suggestions are being added next" className="w-full">
+        <AskAiBox onAskAi={props.onAskAi} />
+      </ComingSoon>
     </aside>
   );
 }
@@ -66,9 +70,7 @@ function PendingList({ changes, busy, onAccept, onReject, onAcceptAll, onSuggest
       </div>
 
       {changes.length === 0 ? (
-        <p className="px-4 py-10 text-center text-sm leading-relaxed text-ink-muted">
-          No pending changes. Select text in the document or ask AI for suggestions.
-        </p>
+        <TryItGuide />
       ) : (
         <>
           <div className="flex items-center justify-between pt-1">
@@ -92,6 +94,34 @@ function PendingList({ changes, busy, onAccept, onReject, onAcceptAll, onSuggest
           ))}
         </>
       )}
+    </div>
+  );
+}
+
+// Shown when nothing is pending: a short list of things to try in the prototype.
+const tryItSteps = [
+  { title: "Search", detail: "Type “liability” in the search box on the left, then click a result." },
+  { title: "Suggest an edit", detail: "Select text in the contract (try “thirty (30) days” in §9.2), then click Suggest edit." },
+  { title: "Rename a term", detail: "Click Rename term above and change “Licensee” to “Customer”." },
+  { title: "Accept or reject", detail: "Review the redline, accept a change, then open the History tab." },
+];
+
+function TryItGuide() {
+  return (
+    <div className="rounded-xl border border-dashed border-line px-4 py-4">
+      <p className="text-sm font-medium">No pending changes yet. Try this:</p>
+      <ol className="mt-3 flex flex-col gap-3">
+        {tryItSteps.map((step, index) => (
+          <li key={step.title} className="flex gap-2.5">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-clay text-[11px] font-semibold text-rust">
+              {index + 1}
+            </span>
+            <span className="text-[13px] leading-snug">
+              <span className="font-medium">{step.title}.</span> <span className="text-ink-muted">{step.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
@@ -143,7 +173,7 @@ function AskAiBox({ onAskAi }: { onAskAi: (instruction: string) => void }) {
   const [instruction, setInstruction] = useState("");
 
   return (
-    <div className="shrink-0 border-t border-line p-4">
+    <div className="w-full shrink-0 border-t border-line p-4">
       <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-sky-ink">
         <Sparkles size={13} /> Ask AI for suggested edits
       </div>
