@@ -26,6 +26,8 @@ Every edit, whether from a person or the AI, becomes a **pending redline** you c
 
 ---
 
+
+
 ## Who it's for
 
 **Sarah, Commercial Counsel** at a 300-person SaaS company. She handles ~40 NDAs and MSAs a month, often on deadline from sales. She's skeptical of AI that "makes things up," and she needs to show her General Counsel what changed and why.
@@ -41,6 +43,8 @@ As Sarah, I can:
 
 ---
 
+
+
 ## Quick start
 
 **Prerequisites:** Python 3.11+ and Node 20+.
@@ -50,8 +54,8 @@ npm run setup     # creates backend/.venv, installs Python and Node dependencies
 npm run dev       # starts the API (port 8000) and the web app (port 3000) together
 ```
 
-- App: <http://localhost:3000>
-- Interactive API docs: <http://localhost:8000/docs>
+- App: [http://localhost:3000](http://localhost:3000)
+- Interactive API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 - Tests: `npm test`
 
 **AI suggestions (optional).** Everything except "Ask AI" works without a key. To turn it on:
@@ -66,6 +70,8 @@ Without a key, the Ask AI box shows a friendly "AI isn't set up yet" message (HT
 > Documents live in memory for the session. Restarting the API resets the three sample contracts.
 
 ---
+
+
 
 ## Demo walkthrough
 
@@ -82,23 +88,29 @@ Grayed-out controls (other nav items, Export, Send, extra tabs) are placeholders
 
 ---
 
+
+
 ## API reference
 
-Runnable examples for every endpoint: [`samples/requests.sh`](samples/requests.sh) (start the API, then `bash samples/requests.sh`). The full schema is at `/docs`.
+Runnable examples for every endpoint: [samples/requests.sh](samples/requests.sh) (start the API, then `bash samples/requests.sh`). The full schema is at `/docs`.
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | Health check |
-| GET | `/documents` | List documents (no text): `id, title, file_type, version, updated_at, size_chars` |
-| GET | `/documents/{id}` | One document with its text and current `version` |
-| POST | `/documents` | Create from JSON `{title, text}` |
-| POST | `/documents/upload` | Upload .docx / .md / .txt (multipart), converted to Markdown |
-| PATCH | `/documents/{id}` | Apply one or more changes (all-or-nothing) and save a new version |
-| POST | `/documents/{id}/preview` | Same body as PATCH, **saves nothing**; returns the would-be text and an inline redline |
-| POST | `/documents/{id}/suggestions` | AI-suggested changes (validated against the document), **saves nothing** |
-| GET | `/documents/search?q=&limit=&offset=&whole_word=` | Search all documents (case-insensitive, paged) |
-| GET | `/documents/{id}/search?q=…` | Search one document |
-| GET | `/documents/{id}/history` | Versions, newest first: author, timestamp, and each change's reason and source |
+
+| Method | Path                                              | Purpose                                                                                |
+| ------ | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| GET    | `/health`                                         | Health check                                                                           |
+| GET    | `/documents`                                      | List documents (no text): `id, title, file_type, version, updated_at, size_chars`      |
+| GET    | `/documents/{id}`                                 | One document with its text and current `version`                                       |
+| POST   | `/documents`                                      | Create from JSON `{title, text}`                                                       |
+| POST   | `/documents/upload`                               | Upload .docx / .md / .txt (multipart), converted to Markdown                           |
+| PATCH  | `/documents/{id}`                                 | Apply one or more changes (all-or-nothing) and save a new version                      |
+| POST   | `/documents/{id}/preview`                         | Same body as PATCH, **saves nothing**; returns the would-be text and an inline redline |
+| POST   | `/documents/{id}/suggestions`                     | AI-suggested changes (validated against the document), **saves nothing**               |
+| GET    | `/documents/search?q=&limit=&offset=&whole_word=` | Search all documents (case-insensitive, paged)                                         |
+| GET    | `/documents/{id}/search?q=…`                      | Search one document                                                                    |
+| GET    | `/documents/{id}/history`                         | Versions, newest first: author, timestamp, and each change's reason and source         |
+
+
+
 
 ### Example: edit a document
 
@@ -129,8 +141,22 @@ PATCH /documents/master-services-agreement
   "version": 2,
   "text": "# Master Services Agreement\n\n…updated text…",
   "applied": [
-    { "find": "thirty (30) days", "replace": "sixty (60) days", "occurrence": 2, "count": 1, "reason": "Playbook: …", "source": "human" },
-    { "find": "Licensee", "replace": "Customer", "occurrence": "all", "count": 24, "reason": null, "source": "human" }
+    {
+      "find": "thirty (30) days",
+      "replace": "sixty (60) days",
+      "occurrence": 2,
+      "count": 1,
+      "reason": "Playbook: …",
+      "source": "human"
+    },
+    {
+      "find": "Licensee",
+      "replace": "Customer",
+      "occurrence": "all",
+      "count": 24,
+      "reason": null,
+      "source": "human"
+    }
   ]
 }
 ```
@@ -146,23 +172,33 @@ Every error has the same shape, with a message written for a lawyer, not a devel
   "error": "\"thirty (30) days\" appears 2 times. Choose which one to change, or choose all.",
   "code": 422,
   "type": "ambiguous_match",
-  "details": { "change_index": 0, "count": 2, "matches": [ { "occurrence": 1, "snippet": "…", "match_start": 61, "match_end": 77 } ] }
+  "details": {
+    "change_index": 0,
+    "count": 2,
+    "matches": [
+      { "occurrence": 1, "snippet": "…", "match_start": 61, "match_end": 77 }
+    ]
+  }
 }
 ```
 
-| Status | `type` | When |
-|---|---|---|
-| 400 | `invalid_request` | Malformed payload (FastAPI's validation errors are reshaped into this format), empty search |
-| 404 | `not_found` | Unknown document or endpoint |
-| 409 | `version_conflict` | `expected_version` is stale; `details.current_version` says what's current |
-| 413 | `too_large` | Upload over 20MB, or document too large for AI |
-| 415 | `unsupported_file_type` | Anything but .docx / .md / .txt |
-| 422 | `target_not_found`, `ambiguous_match`, `occurrence_out_of_range` | The change can't be applied as written |
-| 500 | `server_error` | Unexpected; the real error is logged, never shown |
-| 502 | `ai_unavailable` | The AI provider failed or declined |
-| 503 | `ai_not_configured` | No API key set |
+
+| Status | `type`                                                           | When                                                                                        |
+| ------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 400    | `invalid_request`                                                | Malformed payload (FastAPI's validation errors are reshaped into this format), empty search |
+| 404    | `not_found`                                                      | Unknown document or endpoint                                                                |
+| 409    | `version_conflict`                                               | `expected_version` is stale; `details.current_version` says what's current                  |
+| 413    | `too_large`                                                      | Upload over 20MB, or document too large for AI                                              |
+| 415    | `unsupported_file_type`                                          | Anything but .docx / .md / .txt                                                             |
+| 422    | `target_not_found`, `ambiguous_match`, `occurrence_out_of_range` | The change can't be applied as written                                                      |
+| 500    | `server_error`                                                   | Unexpected; the real error is logged, never shown                                           |
+| 502    | `ai_unavailable`                                                 | The AI provider failed or declined                                                          |
+| 503    | `ai_not_configured`                                              | No API key set                                                                              |
+
 
 ---
+
+
 
 ## Product decisions
 
@@ -170,29 +206,33 @@ These matter more than the code. Each one trades something away on purpose.
 
 - **Edits target text, not character positions.** "Find `State of California`, replace with `State of Delaware`" is how lawyers and LLMs describe edits. Positions go stale after any earlier edit, and a wrong position silently corrupts the contract. With text targeting, missing text fails loudly. *(Ranges could be added later for precise tools.)*
 - **Ambiguous edits are rejected, and the user is helped to pick.** If the text appears more than once and no `occurrence` is given, the API returns the count and a snippet of each match, and the UI turns that into a "Which one did you mean?" picker. Silently editing the first match is fast, but editing the wrong clause is the worst failure in a contract.
-- **`occurrence: "all"` for renaming defined terms**, with the count shown before anything is added. Renaming "Licensee" to "Customer" across a contract is one of the most common legal edits.
+- `occurrence: "all"` **for renaming defined terms**, with the count shown before anything is added. Renaming "Licensee" to "Customer" across a contract is one of the most common legal edits.
 - **Whole-word matching by default**, so renaming "Term" doesn't touch "Termination". It uses lookarounds, not `\b`, so phrases that start or end with punctuation, like `(a)`, still match.
 - **Edits are case-sensitive; search is not.** "Company" (a defined term) and "company" (the generic word) mean different things in a contract, but people type search queries loosely.
 - **Several changes per request, all-or-nothing.** A half-applied redline is worse than none. Changes apply in order to a copy, and nothing is saved unless every one succeeds; the error says which change failed.
 - **Version numbers catch conflicting edits.** Writes send the `expected_version` they were looking at; if someone saved since, the API returns **409** instead of overwriting their work, and the UI offers a one-click reload that keeps your pending changes.
 - **Preview before saving.** `POST /preview` runs the same changes without saving and returns the inline redline. This powers the accept/reject screen, and it means problems (ambiguous or missing text) show up while you're reviewing, not after you click Accept.
-- **Every change records `author`, `reason`, and `source`** (`human` or `ai`), so the audit trail distinguishes "AI suggestion, accepted by Sarah" from Sarah's own edits.
+- **Every change records** `author`**,** `reason`**, and** `source` (`human` or `ai`), so the audit trail distinguishes "AI suggestion, accepted by Sarah" from Sarah's own edits.
 - **Full-text snapshot per version.** Simple, and it makes restoring an old version trivial: a restore would create a *new* version, so nothing is ever erased. Production would store diffs to save memory.
 - **AI suggests, never applies.** AI output arrives in the same shape as human edits and goes through the same review. Before anyone sees it, a **deterministic guardrail** applies each suggestion to the real text and **drops any whose text isn't there (hallucinated) or is ambiguous**, and the UI says how many were dropped and why. The AI can be wrong; it can't put words in the contract that aren't there or edit the wrong clause.
-- **The AI follows a house playbook** ([`backend/data/playbook.md`](backend/data/playbook.md)): 2x fee liability cap, Delaware law, Net 30, 60 days' termination notice, 3-year NDA term, mutual indemnities. Suggestions stay consistent with company standards no matter who's reviewing.
+- **The AI follows a house playbook** ([backend/data/playbook.md](backend/data/playbook.md)): 2x fee liability cap, Delaware law, Net 30, 60 days' termination notice, 3-year NDA term, mutual indemnities. Suggestions stay consistent with company standards no matter who's reviewing.
 - **Uploads become Markdown.** Markdown keeps headings, bold, and numbering while staying plain text underneath, so the same edit and search logic works for every file type. **No PDF in v1:** contracts are negotiated in Word, and PDFs are usually the signed final copy.
 
 ---
+
+
 
 ## API design rationale
 
 - **REST resources plus a few action endpoints.** Documents are resources: `GET` to read, `POST` to create, `PATCH` to edit. "Run these edits but don't save" (`/preview`) and "ask the AI" (`/suggestions`) aren't updates to a resource, so they're explicit `POST` actions rather than overloaded flags on `PATCH`.
 - **Reads and writes are separate.** `GET` never changes anything. Preview and suggestions are `POST` because they take a body, but they also save nothing.
-- **`expected_version` in the body, not an `If-Match` header.** ETags with `If-Match` are the more "correct" HTTP mechanism, but a body field is easier for clients to send, visible in the `/docs` page, and easier to explain to an integration partner. The semantics are the same (optimistic concurrency, 409 on mismatch), so switching later is easy.
+- `expected_version` **in the body, not an** `If-Match` **header.** ETags with `If-Match` are the more "correct" HTTP mechanism, but a body field is easier for clients to send, visible in the `/docs` page, and easier to explain to an integration partner. The semantics are the same (optimistic concurrency, 409 on mismatch), so switching later is easy.
 - **Text targeting, not ranges** (see above). The `operation` field (`"replace"` only, for now) mirrors the brief's example shape and leaves room for new operations without breaking clients. A deletion is a replace with `""`.
 - **Validation errors are 400, not FastAPI's default 422.** 422 is reserved for "your request was well-formed, but the text isn't in the contract," which is a different problem for a client to handle.
 
 ---
+
+
 
 ## Architecture
 
@@ -222,25 +262,29 @@ redline-review/
 
 - **Logic is separate from routes.** `redline.py`, `search.py`, and `matching.py` are pure functions with no web framework, so they're easy to test and reuse. Each route in `main.py` reads the request, calls one function, and returns the result.
 - **The frontend only displays data.** Every rule (matching, ambiguity, versioning, the AI guardrail, the redline diff) lives in Python, where it's tested in one place. The redline itself is built on the server by comparing before/after text word by word (`difflib`), and comes back as Markdown with `<del>`/`<ins>` tags.
-- **One command runs everything.** Next.js forwards `/api/*` to FastAPI, so there's no cross-origin setup. The one exception is uploads, which go straight to port 8000: the Next.js dev proxy timed out on a 15MB upload that FastAPI itself handled in 0.07s.
-- **In-memory storage, isolated in `store.py`.** No database to install, instant lookups, and a single lock wraps "check version → apply → save" so two simultaneous edits can't both start from the same text. Swapping in Postgres means changing one module. The trade-off: data lasts only as long as the server, and the lock only works on one server (see [`docs/infra-notes.md`](docs/infra-notes.md)).
+- **One command runs everything.** Next.js forwards `/api/` to FastAPI, so there's no cross-origin setup. The one exception is uploads, which go straight to port 8000: the Next.js dev proxy timed out on a 15MB upload that FastAPI itself handled in 0.07s.
+- **In-memory storage, isolated in `store.py`.** No database to install, instant lookups, and a single lock wraps "check version → apply → save" so two simultaneous edits can't both start from the same text. Swapping in Postgres means changing one module. The trade-off: data lasts only as long as the server, and the lock only works on one server (see [docs/infra-notes.md](docs/infra-notes.md)).
 - **AI call design.** One small function calls Claude (`claude-sonnet-5-5` by default, set in `.env`). **Structured outputs** guarantee the reply matches our JSON schema (`[{find, replace, reason}]`), so there's no free-text parsing. A server-side **refusal fallback** retries on another model if the first one declines. The function is swapped for a fake in tests, so the tests need no key or network. In production, documents sent to a model provider would go under a zero-data-retention agreement.
 
 ---
 
+
+
 ## Performance
 
-Measured by [`backend/tests/test_performance.py`](backend/tests/test_performance.py) on a generated **10MB** contract (Apple M1 Pro). Run it yourself: `cd backend && .venv/bin/pytest tests/test_performance.py -s`.
+Measured by [backend/tests/test_performance.py](backend/tests/test_performance.py) on a generated **10MB** contract (Apple M1 Pro). Run it yourself: `cd backend && .venv/bin/pytest tests/test_performance.py -s`.
 
-| Operation on 10MB | Time |
-|---|---|
-| Find all 104,733 matches of "Customer" (whole word) | 147 ms |
-| Find a unique phrase near the end | 144 ms |
-| Replace one unique phrase | 149 ms |
-| Rename "Customer" everywhere (104,733 replacements) | 161 ms |
-| Search "customer data", first page of 34,911 hits | 66 ms |
-| Search, last page (line numbers counted deep in the file) | 140 ms |
+
+| Operation on 10MB                                                   | Time             |
+| ------------------------------------------------------------------- | ---------------- |
+| Find all 104,733 matches of "Customer" (whole word)                 | 147 ms           |
+| Find a unique phrase near the end                                   | 144 ms           |
+| Replace one unique phrase                                           | 149 ms           |
+| Rename "Customer" everywhere (104,733 replacements)                 | 161 ms           |
+| Search "customer data", first page of 34,911 hits                   | 66 ms            |
+| Search, last page (line numbers counted deep in the file)           | 140 ms           |
 | Full API round trip: upload 10MB / PATCH rename everywhere / search | 82 / 171 / 66 ms |
+
 
 **Why it's fast:** matching is a single regex pass over the text (linear time). Replacements are built from slices in one pass and joined once, never by repeated string concatenation. Search collects only match *positions* first (so `total` is exact and cheap), then builds snippets and line numbers only for the requested page.
 
@@ -250,6 +294,8 @@ Measured by [`backend/tests/test_performance.py`](backend/tests/test_performance
 - **The viewer shows plain text above 300k characters.** Formatting 15MB of Markdown in the browser took about 50 seconds; plain text renders in 0.16 seconds.
 - **AI review is capped at 150k characters.** Chunking long contracts into sections is the next step.
 - **Version snapshots cost memory.** Each version stores the full text, so ten edits to a 10MB contract hold ~100MB. Production would store diffs.
+
+
 
 ### Search indexing: why not an inverted index (yet)
 
@@ -262,6 +308,8 @@ Here, a linear scan handles 10MB in about 0.1 seconds and is always consistent w
 
 ---
 
+
+
 ## Testing
 
 ```bash
@@ -269,28 +317,34 @@ npm test                                                   # all 95 backend test
 cd backend && .venv/bin/pytest tests/test_performance.py -s  # with printed timings
 ```
 
-| File | Covers |
-|---|---|
-| `test_redline.py` | Single, nth, and "all" replacements; ambiguity with counts and snippets; not found; out of range; whole-word; case sensitivity; deletion; backslashes inserted literally; all-or-nothing bulk; redline output (grouping, bold markers, no newlines inside tags, size cap) |
-| `test_search.py` | Case-insensitivity, snippet offsets, line numbers, paging with an exact total, one-document filter, no results, empty query |
-| `test_store.py` | Seeding, versions with attribution, 409 conflicts, failed bulk edits save nothing |
-| `test_api.py` | Every endpoint through HTTP, including 400/404/409/415/422/500 error shapes, preview not saving, uploads (.txt and a generated .docx) |
-| `test_parsing.py` | .txt/.md/.docx conversion, line endings, damaged .docx, PDF rejected, size limit |
-| `test_llm.py` | The guardrail (hallucinated and ambiguous suggestions dropped, in-order checking), the endpoint saving nothing, AI changes applied and attributed in history, friendly 503 without a key. The AI call is always faked. |
-| `test_performance.py` | The 10MB benchmarks above |
+
+| File                  | Covers                                                                                                                                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_redline.py`     | Single, nth, and "all" replacements; ambiguity with counts and snippets; not found; out of range; whole-word; case sensitivity; deletion; backslashes inserted literally; all-or-nothing bulk; redline output (grouping, bold markers, no newlines inside tags, size cap) |
+| `test_search.py`      | Case-insensitivity, snippet offsets, line numbers, paging with an exact total, one-document filter, no results, empty query                                                                                                                                               |
+| `test_store.py`       | Seeding, versions with attribution, 409 conflicts, failed bulk edits save nothing                                                                                                                                                                                         |
+| `test_api.py`         | Every endpoint through HTTP, including 400/404/409/415/422/500 error shapes, preview not saving, uploads (.txt and a generated .docx)                                                                                                                                     |
+| `test_parsing.py`     | .txt/.md/.docx conversion, line endings, damaged .docx, PDF rejected, size limit                                                                                                                                                                                          |
+| `test_llm.py`         | The guardrail (hallucinated and ambiguous suggestions dropped, in-order checking), the endpoint saving nothing, AI changes applied and attributed in history, friendly 503 without a key. The AI call is always faked.                                                    |
+| `test_performance.py` | The 10MB benchmarks above                                                                                                                                                                                                                                                 |
+
 
 ---
+
+
 
 ## Limitations
 
 - **Formatting is partly lost on .docx import.** Headings, bold, and paragraphs survive; tables, comments, and existing tracked changes don't.
-- **Edits can't span formatting.** Selecting text that crosses a **bold** boundary won't match, because the stored Markdown contains `**` markers that aren't on screen.
+- **Edits can't span formatting.** Selecting text that crosses a **bold** boundary won't match, because the stored Markdown contains `*` markers that aren't on screen.
 - **In-memory only.** Restarting the API resets everything.
 - **No PDF import.**
 - **AI review is limited to 150k characters**, and it's untested against the live API in this repo's tests (the call is faked).
 - **No auth or permissions.** "Editing as" is a free-text name.
 
 ---
+
+
 
 ## What I'd build next
 
@@ -306,13 +360,6 @@ Ranked by customer impact:
 8. **Chunked AI review** for long contracts.
 9. **PDF import.**
 10. **Deployment.**
-
----
-
-## Not done (yet)
-
-- **Restore an earlier version** (`GET /documents/{id}/versions/{v}` and `POST /documents/{id}/restore`). The storage already keeps a full snapshot per version, so this is a small addition.
-- **Demo video:** to be linked here.
 
 ---
 
