@@ -3,10 +3,23 @@
 Each one carries an HTTP status, a short machine-readable `type`, a message
 written for a lawyer (not a developer), and optional `details`. A single handler
 in main.py turns any of these into the JSON error shape.
+
+Example:
+    raise TargetNotFound('Couldn\'t find "Delaware" in this document.', {"find": "Delaware"})
+
+    ...becomes this HTTP response (status 422):
+    {
+      "error": "Couldn't find \\"Delaware\\" in this document.",
+      "code": 422,
+      "type": "target_not_found",
+      "details": {"find": "Delaware"}
+    }
 """
 
 
 class AppError(Exception):
+    """Base class. Each subclass below only changes `status` and `type`."""
+
     status = 500
     type = "server_error"
 

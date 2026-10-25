@@ -28,13 +28,23 @@ _lock = threading.Lock()
 
 
 def now() -> str:
+    """Current time as text, e.g. "2026-10-25T14:03:11.123456+00:00" (UTC)."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def seed() -> None:
-    """Load the sample contracts from backend/data/. Called on startup and in tests."""
+    """Load the sample contracts from backend/data/. Called on startup and in tests.
+
+    Example:
+        backend/data/mutual-nda.md  ->  documents["mutual-nda"], version 1,
+                                        title "Mutual Non-Disclosure Agreement"
+        backend/data/playbook.md    ->  skipped (it's not a contract)
+    """
     with _lock:
+        # Start from empty, so calling seed() again (e.g. between tests) resets everything.
         documents.clear()
+
+        # Every .md file in data/ becomes a document, except the playbook.
         for path in sorted(DATA_DIR.glob("*.md")):
             if path.name == PLAYBOOK_FILE:
                 continue
@@ -44,10 +54,17 @@ def seed() -> None:
 
 
 def list_documents() -> list[dict]:
+    """All documents, in the order they were added."""
     return list(documents.values())
 
 
 def get_document(doc_id: str) -> dict:
+    """Look up one document by id.
+
+    Examples:
+        get_document("mutual-nda")  -> {"id": "mutual-nda", "title": ..., "text": ..., ...}
+        get_document("nope")        -> raises NotFound (becomes a 404)
+    """
     document = documents.get(doc_id)
     if document is None:
         raise NotFound(f'There is no document with id "{doc_id}".')
@@ -55,8 +72,16 @@ def get_document(doc_id: str) -> dict:
 
 
 def create_document(title: str, text: str, file_type: str, author: str = "Anonymous") -> dict:
-    """Add a new document (from JSON or an upload). Its id is the title as a slug plus a short random suffix."""
-    doc_id = f"{slugify(title)}-{secrets.token_hex(3)}"
+    """Add a new document (from JSON or an upload).
+
+    Its id is the title as a slug plus a short random suffix, so two uploads with
+    the same title don't overwrite each other.
+
+    Example:
+        create_document("Vendor Agreement (Draft)", "Hello", "txt")
+            -> {"id": "vendor-agreement-draft-3f9a1c", "version": 1, ...}
+    """
+    doc_id = f"{slugify(title)}-{secrets.token_hex(3)}"  # token_hex(3) -> 6 random hex characters
     document = _new_document(doc_id, title, text, file_type, author)
     with _lock:
         documents[doc_id] = document
@@ -73,16 +98,43 @@ def save_changes(
 
     If the caller says which version they were looking at (expected_version) and
     someone else has saved since, we refuse with a 409 instead of overwriting.
+
+    Examples (the MSA is at version 1):
+        save_changes("master-services-agreement",
+                     [Change("State of California", "State of Delaware")],
+                     author="Qudus", expected_version=1)
+            -> (document now at version 2, [{"find": "State of California", "count": 1, ...}])
+
+        save_changes("master-services-agreement", [...], expected_version=1)   # called again
+            -> raises VersionConflict   # the document is at version 2 now
+
+        save_changes("master-services-agreement", [Change("not there", "x")])
+            -> raises TargetNotFound; still version 2, nothing saved
     """
+    # Everything below happens while holding the lock, so no other request can
+    # sneak in a save between our "read" and our "write".
     with _lock:
+        # 1. Get the current document.
         document = get_document(doc_id)
+
+        # 2. Make sure nobody saved a newer version since the user last looked.
         check_version(document, expected_version)
-        new_text, applied = apply_changes(document["text"], changes)  # raises before saving if any change fails
+
+        # 3. Apply all the edits. If any fails, this raises and we never reach step 4.
+        new_text, applied = apply_changes(document["text"], changes)
+
+        # 4. Save the result as a new version, with who did it and what changed.
         _add_version(document, new_text, author, applied)
         return document, applied
 
 
 def get_version(doc_id: str, version: int) -> dict:
+    """One saved version of a document, including its full text.
+
+    Examples:
+        get_version("mutual-nda", 1)   -> {"version": 1, "author": "System", "text": ..., "changes": []}
+        get_version("mutual-nda", 99)  -> raises NotFound
+    """
     document = get_document(doc_id)
     for entry in document["versions"]:
         if entry["version"] == version:
@@ -91,6 +143,13 @@ def get_version(doc_id: str, version: int) -> dict:
 
 
 def check_version(document: dict, expected_version: int | None) -> None:
+    """Raise VersionConflict if the document has moved on since the caller looked.
+
+    Examples (document is at version 3):
+        check_version(document, None)  -> OK (caller didn't ask for a check)
+        check_version(document, 3)     -> OK
+        check_version(document, 2)     -> raises VersionConflict (becomes a 409)
+    """
     if expected_version is not None and expected_version != document["version"]:
         raise VersionConflict(
             f"This document changed since you opened it (now v{document['version']}). Reload to see the latest.",
@@ -99,16 +158,18 @@ def check_version(document: dict, expected_version: int | None) -> None:
 
 
 def read_playbook() -> str:
+    """The house playbook text (used by the AI in Phase 4)."""
     return (DATA_DIR / PLAYBOOK_FILE).read_text(encoding="utf-8")
 
 
 def _new_document(doc_id: str, title: str, text: str, file_type: str, author: str = "System") -> dict:
+    """Build the dictionary for a brand-new document at version 1."""
     timestamp = now()
     return {
         "id": doc_id,
         "title": title,
         "file_type": file_type,  # md | txt | docx
-        "text": text,
+        "text": text,  # always the latest text
         "version": 1,
         "created_at": timestamp,
         "updated_at": timestamp,
@@ -119,10 +180,20 @@ def _new_document(doc_id: str, title: str, text: str, file_type: str, author: st
 
 
 def _add_version(document: dict, new_text: str, author: str, applied: list[dict]) -> None:
+    """Bump the version number and record the new text plus who changed what.
+
+    Example: a document at version 2 becomes version 3, and versions[-1] is
+        {"version": 3, "author": "Qudus", "text": <new text>,
+         "changes": [{"find": "Licensee", "replace": "Customer", "count": 24, "source": "human", ...}]}
+    """
     timestamp = now()
+
+    # Update the "current" fields...
     document["version"] += 1
     document["text"] = new_text
     document["updated_at"] = timestamp
+
+    # ...and add an entry to the history (older versions are never changed).
     document["versions"].append(
         {
             "version": document["version"],
@@ -135,14 +206,29 @@ def _add_version(document: dict, new_text: str, author: str, applied: list[dict]
 
 
 def title_from_text(text: str, fallback: str) -> str:
-    """Use the first Markdown heading ("# Mutual NDA") as the title, if there is one."""
+    """Use the first Markdown heading as the title, if there is one.
+
+    Examples:
+        title_from_text("# Mutual NDA\\n\\nBody...", "mutual-nda")  -> "Mutual NDA"
+        title_from_text("No heading here", "vendor-terms")         -> "Vendor Terms"
+    """
+    # Look for the first line that starts with "# " (a top-level Markdown heading).
     for line in text.splitlines():
         if line.startswith("# "):
             return line[2:].strip()
+
+    # No heading: tidy up the fallback ("vendor-terms" -> "Vendor Terms").
     return fallback.replace("-", " ").title()
 
 
 def slugify(title: str) -> str:
-    """"Master Services Agreement" -> "master-services-agreement"."""
+    """Turn a title into a URL-safe id.
+
+    Examples:
+        slugify("Master Services Agreement")  -> "master-services-agreement"
+        slugify("Vendor Agreement (Draft)")   -> "vendor-agreement-draft"
+        slugify("!!!")                        -> "document"
+    """
+    # Lowercase, turn every run of non-letters/digits into "-", trim "-" from the ends.
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug or "document"
