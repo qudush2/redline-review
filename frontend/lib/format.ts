@@ -19,7 +19,7 @@ export function fileTypeLabel(fileType: FileType): string {
 
 // Hide Markdown symbols in short text previews (search results, match lists).
 // Example: '(**"Provider"**), and ## 8. Limits' -> '("Provider"), and 8. Limits'
-export function stripMarkdown(text: string): string {
+function stripMarkdown(text: string): string {
   return text
     .replace(/\*\*|__|`/g, "") // bold and code markers
     .replace(/#{1,6} /g, ""); // heading markers like "## "

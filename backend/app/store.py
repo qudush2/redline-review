@@ -16,7 +16,7 @@ from app.redline import Change, apply_changes, build_redline
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
-# Not a contract: house positions the AI follows (used in Phase 4).
+# Not a contract: the house positions the AI follows (see llm.py).
 PLAYBOOK_FILE = "playbook.md"
 
 # id -> document dict (see _new_document for the shape)
@@ -188,7 +188,7 @@ def check_version(document: dict, expected_version: int | None) -> None:
 
 
 def read_playbook() -> str:
-    """The house playbook text (used by the AI in Phase 4)."""
+    """The house playbook text, which the AI follows when suggesting edits (see llm.py)."""
     return (DATA_DIR / PLAYBOOK_FILE).read_text(encoding="utf-8")
 
 

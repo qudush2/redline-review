@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Hide the floating Next.js dev badge so it doesn't cover the app in demos.
+  devIndicators: false,
+
   // Forward /api/* to the FastAPI server, so the browser can talk to
   // localhost:3000 for everything. One exception: file uploads go straight to
   // localhost:8000, because this dev proxy times out on large request bodies

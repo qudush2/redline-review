@@ -141,7 +141,13 @@ def test_redline_groups_a_multi_word_edit_into_one_mark():
 
 def test_redline_keeps_bold_markers_outside_the_tags():
     redline = build_redline('a company (**"Licensee"**). Next', 'a company (**"Customer"**). Next')
-    assert redline == 'a company (**"<del>Licensee</del><ins>Customer</ins>"**). Next'
+    assert redline == 'a company (**"<del>Licensee</del> <ins>Customer</ins>"**). Next'
+
+
+def test_redline_keeps_a_replacement_at_the_end_of_a_paragraph_in_that_paragraph():
+    # The paragraph break must come after both tags, not between them.
+    redline = build_redline("Liability shall be unlimited.\n\nNext clause.", "Liability shall be capped at 2x fees.\n\nNext clause.")
+    assert redline == "Liability shall be <del>unlimited.</del> <ins>capped at 2x fees.</ins>\n\nNext clause."
 
 
 def test_redline_never_puts_a_newline_inside_a_tag():

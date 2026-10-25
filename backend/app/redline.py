@@ -275,9 +275,21 @@ def build_redline(before: str, after: str) -> str | None:
             pieces.append(wrap_in_tag("ins", new_chunk))
         else:
             # "replace": show the old text struck through, then the new text.
-            # Shared bold/italic markers are kept outside the tags (see below).
-            prefix, old_core, new_core, suffix = split_shared_formatting(old_chunk, new_chunk)
-            pieces.append(prefix + wrap_in_tag("del", old_core) + wrap_in_tag("ins", new_core) + suffix)
+            # a) Whitespace that ends BOTH chunks (a space, or a paragraph break) goes
+            #    after the whole edit. Left in place, a paragraph break at the end of a
+            #    clause would land between <del> and <ins> and push the new text into a
+            #    paragraph of its own.
+            old_core, new_core, tail = old_chunk, new_chunk, ""
+            old_tail = old_chunk[len(old_chunk.rstrip()) :]
+            if old_tail and old_tail == new_chunk[len(new_chunk.rstrip()) :]:
+                old_core, new_core, tail = old_chunk.rstrip(), new_chunk.rstrip(), old_tail
+            # b) Shared bold/italic markers are kept outside the tags (see below).
+            prefix, old_core, new_core, suffix = split_shared_formatting(old_core, new_core)
+            # c) One space between the deletion and the insertion, like Word's track changes.
+            separator = " " if tail else ""
+            pieces.append(
+                prefix + wrap_in_tag("del", old_core) + separator + wrap_in_tag("ins", new_core) + suffix + tail
+            )
 
     return "".join(pieces)
 
