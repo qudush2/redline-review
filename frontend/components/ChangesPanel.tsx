@@ -3,15 +3,24 @@
 import { useState } from "react";
 import { ArrowUp, CheckCheck, PencilLine, Replace, Sparkles } from "lucide-react";
 import ChangeCard from "./ChangeCard";
-import type { HistoryEntry, PendingChange } from "@/lib/mockData";
+import type { HistoryEntry } from "@/lib/api";
+import { occurrenceLabel, timeAgo } from "@/lib/format";
+import type { PendingChangeView } from "@/lib/pending";
 
 type ChangesPanelProps = {
-  pendingChanges: PendingChange[];
+  changes: PendingChangeView[];
   history: HistoryEntry[];
+  busy: boolean;
+  onAccept: (id: string) => void;
+  onReject: (id: string) => void;
+  onAcceptAll: () => void;
+  onSuggestEdit: () => void;
+  onRenameTerm: () => void;
+  onAskAi: (instruction: string) => void;
 };
 
 // Right column: pending redlines to accept/reject, version history, and the AI box.
-export default function ChangesPanel({ pendingChanges, history }: ChangesPanelProps) {
+export default function ChangesPanel(props: ChangesPanelProps) {
   const [tab, setTab] = useState<"pending" | "history">("pending");
 
   return (
@@ -19,54 +28,67 @@ export default function ChangesPanel({ pendingChanges, history }: ChangesPanelPr
       <div className="flex shrink-0 gap-1 border-b border-line px-4 pt-3">
         <PanelTab active={tab === "pending"} onClick={() => setTab("pending")}>
           Pending
-          <span className="rounded-full bg-clay px-1.5 text-[11px] font-semibold text-rust">
-            {pendingChanges.length}
-          </span>
+          <span className="rounded-full bg-clay px-1.5 text-[11px] font-semibold text-rust">{props.changes.length}</span>
         </PanelTab>
         <PanelTab active={tab === "history"} onClick={() => setTab("history")}>
           History
+          <span className="rounded-full bg-subtle px-1.5 text-[11px] font-semibold text-ink-muted">{props.history.length}</span>
         </PanelTab>
       </div>
 
       <div className="thin-scroll flex-1 overflow-y-auto p-4">
-        {tab === "pending" ? (
-          <PendingList changes={pendingChanges} />
-        ) : (
-          <HistoryList entries={history} />
-        )}
+        {tab === "pending" ? <PendingList {...props} /> : <HistoryList entries={props.history} />}
       </div>
 
-      <AskAiBox />
+      <AskAiBox onAskAi={props.onAskAi} />
     </aside>
   );
 }
 
-function PendingList({ changes }: { changes: PendingChange[] }) {
+function PendingList({ changes, busy, onAccept, onReject, onAcceptAll, onSuggestEdit, onRenameTerm }: ChangesPanelProps) {
+  const acceptableCount = changes.filter((view) => !view.error).length;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-2">
-        <button className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle">
+        <button
+          onClick={onSuggestEdit}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle"
+        >
           <PencilLine size={14} /> Suggest edit
         </button>
-        <button className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle">
+        <button
+          onClick={onRenameTerm}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle"
+        >
           <Replace size={14} /> Rename term
         </button>
       </div>
 
       {changes.length === 0 ? (
-        <p className="px-4 py-10 text-center text-sm text-ink-muted">
+        <p className="px-4 py-10 text-center text-sm leading-relaxed text-ink-muted">
           No pending changes. Select text in the document or ask AI for suggestions.
         </p>
       ) : (
         <>
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs text-ink-muted">Review each change before it&apos;s saved.</span>
-            <button className="flex items-center gap-1 text-xs font-semibold text-rust hover:text-rust-dark">
+            <button
+              onClick={onAcceptAll}
+              disabled={busy || acceptableCount === 0}
+              className="flex items-center gap-1 text-xs font-semibold text-rust hover:text-rust-dark disabled:opacity-40"
+            >
               <CheckCheck size={14} /> Accept all
             </button>
           </div>
-          {changes.map((change) => (
-            <ChangeCard key={change.id} change={change} />
+          {changes.map((view) => (
+            <ChangeCard
+              key={view.change.id}
+              view={view}
+              busy={busy}
+              onAccept={() => onAccept(view.change.id)}
+              onReject={() => onReject(view.change.id)}
+            />
           ))}
         </>
       )}
@@ -74,6 +96,7 @@ function PendingList({ changes }: { changes: PendingChange[] }) {
   );
 }
 
+// Versions newest first. Each version lists its changes, marking AI suggestions.
 function HistoryList({ entries }: { entries: HistoryEntry[] }) {
   return (
     <ol className="relative ml-2 border-l border-line">
@@ -82,14 +105,32 @@ function HistoryList({ entries }: { entries: HistoryEntry[] }) {
           <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-terracotta" />
           <p className="text-sm">
             <span className="font-semibold">v{entry.version}</span>
-            <span className="text-ink-muted"> · {entry.author} · {entry.timestamp}</span>
-          </p>
-          <p className="mt-1 text-[13px] leading-snug text-ink-muted">{entry.summary}</p>
-          {entry.source === "ai" ? (
-            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-sky px-2 py-0.5 text-[11px] font-semibold text-sky-ink">
-              <Sparkles size={11} /> AI suggestion
+            <span className="text-ink-muted">
+              {" "}
+              · {entry.author} · {timeAgo(entry.timestamp)}
             </span>
-          ) : null}
+          </p>
+
+          {entry.changes.length === 0 ? (
+            <p className="mt-1 text-[13px] text-ink-muted">Original document</p>
+          ) : (
+            <ul className="mt-1.5 flex flex-col gap-2">
+              {entry.changes.map((change, index) => (
+                <li key={index} className="text-[13px] leading-snug">
+                  <span className="text-del line-through">{change.find}</span>
+                  {" → "}
+                  <span className="text-ins">{change.replace || "(deleted)"}</span>
+                  <span className="text-ink-faint"> · {occurrenceLabel(change.occurrence, change.count)}</span>
+                  {change.reason ? <p className="mt-0.5 text-xs text-ink-muted">{change.reason}</p> : null}
+                  {change.source === "ai" ? (
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky px-2 py-0.5 text-[11px] font-semibold text-sky-ink">
+                      <Sparkles size={11} /> AI suggestion, accepted by {entry.author}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </li>
       ))}
     </ol>
@@ -98,7 +139,7 @@ function HistoryList({ entries }: { entries: HistoryEntry[] }) {
 
 const promptChips = ["Apply our playbook", "Tighten liability", "Check governing law"];
 
-function AskAiBox() {
+function AskAiBox({ onAskAi }: { onAskAi: (instruction: string) => void }) {
   const [instruction, setInstruction] = useState("");
 
   return (
@@ -127,27 +168,18 @@ function AskAiBox() {
         />
         <button
           title="Ask AI"
+          onClick={() => onAskAi(instruction)}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rust text-white hover:bg-rust-dark"
         >
           <ArrowUp size={16} />
         </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-ink-faint">
-        AI only suggests. Nothing changes until you accept it.
-      </p>
+      <p className="mt-1.5 text-[11px] text-ink-faint">AI only suggests. Nothing changes until you accept it.</p>
     </div>
   );
 }
 
-function PanelTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function PanelTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}

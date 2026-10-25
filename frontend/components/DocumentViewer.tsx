@@ -1,20 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
-import { Eye, EyeOff, Minus, Plus, ScanSearch } from "lucide-react";
+import { Eye, EyeOff, Minus, PencilLine, Plus } from "lucide-react";
+import { clearHighlight, highlightMatch } from "@/lib/highlight";
+
+// "Highlight the 2nd match of 'liability'". `key` changes on every click, so
+// clicking the same search result twice still scrolls to it again.
+export type HighlightRequest = { query: string; occurrence: number; key: number };
 
 type DocumentViewerProps = {
-  markdown: string;
+  documentKey: string; // changes when a different document or version is shown
+  markdown: string; // the redline (or plain text when nothing is pending)
+  cleanMarkdown: string; // the text as it reads with every pending change accepted
+  redlineUnavailable: boolean; // true for very large documents
+  highlight: HighlightRequest | null;
+  onSuggestEdit: (selectedText: string) => void;
 };
+
+const ZOOM_STEPS = [80, 90, 100, 110, 125];
+
+// Above this size, formatting Markdown in the browser gets very slow (15MB took
+// close to a minute), so we show plain text instead. Same cap as the backend's redline.
+const MAX_FORMATTED_CHARS = 300_000;
 
 // Center column: the contract rendered on "paper", with redlines inline.
 // rehype-raw lets our <del>/<ins> tags through; rehype-sanitize strips anything unsafe.
-export default function DocumentViewer({ markdown }: DocumentViewerProps) {
+export default function DocumentViewer(props: DocumentViewerProps) {
   const [showRedline, setShowRedline] = useState(true);
+  const [zoomIndex, setZoomIndex] = useState(2); // 100%
+  const [popup, setPopup] = useState<{ text: string; top: number; left: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLElement>(null);
+
+  // A different document or version: forget any selection popup.
+  useEffect(() => setPopup(null), [props.documentKey]);
+
+  // Highlight a search hit once the document's text is on screen.
+  useEffect(() => {
+    if (!props.highlight || !articleRef.current) return;
+    highlightMatch(articleRef.current, props.highlight.query, props.highlight.occurrence);
+  }, [props.highlight, props.documentKey]);
+
+  // Clear the search highlight when leaving this screen.
+  useEffect(() => clearHighlight, []);
+
+  // After the user selects text in the contract, show a small "Suggest edit" button above it.
+  function handleMouseUp() {
+    // 1. What did they select? Collapse line breaks and extra spaces into single spaces.
+    const selection = window.getSelection();
+    const text = selection?.toString().replace(/\s+/g, " ").trim() ?? "";
+    if (!selection || !text || !scrollRef.current) {
+      setPopup(null);
+      return;
+    }
+
+    // 2. Work out where the selection is, relative to the scrolling area, so the
+    //    button stays next to it while scrolling.
+    const selectionBox = selection.getRangeAt(0).getBoundingClientRect();
+    const areaBox = scrollRef.current.getBoundingClientRect();
+    setPopup({
+      text,
+      top: selectionBox.top - areaBox.top + scrollRef.current.scrollTop - 42,
+      left: selectionBox.left - areaBox.left + selectionBox.width / 2,
+    });
+  }
+
+  const zoom = ZOOM_STEPS[zoomIndex];
+  const shownText = showRedline ? props.markdown : props.cleanMarkdown;
+  const isLarge = shownText.length > MAX_FORMATTED_CHARS;
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
@@ -29,32 +86,59 @@ export default function DocumentViewer({ markdown }: DocumentViewerProps) {
         </div>
 
         <div className="flex items-center gap-4">
-          <button className="flex items-center gap-1.5 hover:text-ink">
-            <ScanSearch size={14} /> Find in document
-          </button>
+          <span className="text-xs text-ink-faint">Select text to suggest an edit</span>
           <div className="flex items-center gap-2">
-            <button title="Zoom out" className="hover:text-ink"><Minus size={14} /></button>
-            <span className="w-10 text-center">100%</span>
-            <button title="Zoom in" className="hover:text-ink"><Plus size={14} /></button>
+            <button title="Zoom out" disabled={zoomIndex === 0} onClick={() => setZoomIndex(zoomIndex - 1)} className="hover:text-ink disabled:opacity-40">
+              <Minus size={14} />
+            </button>
+            <span className="w-10 text-center">{zoom}%</span>
+            <button title="Zoom in" disabled={zoomIndex === ZOOM_STEPS.length - 1} onClick={() => setZoomIndex(zoomIndex + 1)} className="hover:text-ink disabled:opacity-40">
+              <Plus size={14} />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="thin-scroll flex-1 overflow-y-auto px-8 py-8">
-        <article className="paper mx-auto max-w-[816px] rounded-sm bg-white px-20 py-16 shadow-[0_1px_3px_rgba(61,51,41,0.08),0_8px_24px_rgba(61,51,41,0.06)]">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
-            {showRedline ? markdown : cleanVersion(markdown)}
-          </ReactMarkdown>
+      <div ref={scrollRef} onMouseUp={handleMouseUp} className="thin-scroll relative flex-1 overflow-y-auto px-8 py-8">
+        {isLarge ? (
+          <p className="mx-auto mb-4 max-w-[816px] rounded-lg bg-clay px-4 py-2 text-[13px] text-rust">
+            Large document: shown as plain text so it loads quickly
+            {props.redlineUnavailable ? ". Review each change in the panel on the right." : "."}
+          </p>
+        ) : null}
+
+        <article
+          ref={articleRef}
+          style={{ zoom: zoom / 100 }}
+          className="paper mx-auto max-w-[816px] rounded-sm bg-white px-20 py-16 shadow-[0_1px_3px_rgba(61,51,41,0.08),0_8px_24px_rgba(61,51,41,0.06)]"
+        >
+          {isLarge ? (
+            // One plain block of text: the browser lays this out fast, even at 10MB+.
+            <div className="whitespace-pre-wrap">{shownText}</div>
+          ) : (
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+              {shownText}
+            </ReactMarkdown>
+          )}
         </article>
+
+        {popup ? (
+          <button
+            // preventDefault on mousedown keeps the text selected while clicking.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              props.onSuggestEdit(popup.text);
+              setPopup(null);
+            }}
+            style={{ top: popup.top, left: popup.left }}
+            className="absolute z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-espresso px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-black"
+          >
+            <PencilLine size={13} /> Suggest edit
+          </button>
+        ) : null}
       </div>
     </section>
   );
-}
-
-// "Clean" view: what the contract reads like if every pending change is accepted.
-// Temporary; Phase 3 uses text_after from the preview endpoint instead.
-function cleanVersion(markdown: string): string {
-  return markdown.replace(/<del>.*?<\/del>/g, "").replace(/<\/?ins>/g, "");
 }
 
 function ToolbarToggle({

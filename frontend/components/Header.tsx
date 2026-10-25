@@ -1,21 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Clock, Download, Send, UserPen } from "lucide-react";
-import type { DocumentSummary } from "@/lib/mockData";
+import { Clock, Download, FileText, Send, UserPen } from "lucide-react";
+import { toast } from "sonner";
+import type { DocumentFull } from "@/lib/api";
+import { fileTypeLabel, timeAgo } from "@/lib/format";
 
 const tabs = ["Document", "Details", "Activity", "Approvals"];
 
 type HeaderProps = {
-  document: DocumentSummary;
+  document: DocumentFull;
   pendingCount: number;
+  editorName: string;
+  onEditorNameChange: (name: string) => void;
 };
 
-// Document header: title, status, version, who is editing, and page tabs.
-// Only the "Document" tab is built; the others are placeholders.
-export default function Header({ document, pendingCount }: HeaderProps) {
+// Document header: title, version, who is editing, and page tabs.
+// Only the "Document" tab is built; the others (and Export/Send) are placeholders.
+export default function Header({ document, pendingCount, editorName, onEditorNameChange }: HeaderProps) {
   const [activeTab, setActiveTab] = useState("Document");
-  const [editorName, setEditorName] = useState("Qudus");
 
   return (
     <div className="shrink-0 border-b border-line bg-surface px-6 pt-5">
@@ -29,22 +32,22 @@ export default function Header({ document, pendingCount }: HeaderProps) {
               v{document.version}
             </span>
             <span className="rounded-full bg-clay px-2.5 py-0.5 text-xs font-medium text-rust">
-              {document.status}
+              {pendingCount > 0 ? "In review" : "Draft"}
             </span>
           </div>
 
           <div className="mt-2 flex items-center gap-5 text-[13px] text-ink-muted">
             <span className="flex items-center gap-1.5">
-              <Building2 size={14} /> {document.counterparty}
+              <FileText size={14} /> {fileTypeLabel(document.file_type)}
             </span>
             <span className="flex items-center gap-1.5">
-              <Clock size={14} /> Updated {document.updated_at}
+              <Clock size={14} /> Updated {timeAgo(document.updated_at)}
             </span>
-            <label className="flex items-center gap-1.5">
+            <label className="flex items-center gap-1.5" title="Recorded as the author of changes you accept">
               <UserPen size={14} /> Editing as
               <input
                 value={editorName}
-                onChange={(event) => setEditorName(event.target.value)}
+                onChange={(event) => onEditorNameChange(event.target.value)}
                 className="w-24 rounded border border-transparent bg-transparent px-1 font-medium text-ink outline-none hover:border-line focus:border-terracotta focus:bg-white"
               />
             </label>
@@ -53,12 +56,19 @@ export default function Header({ document, pendingCount }: HeaderProps) {
 
         <div className="flex shrink-0 items-center gap-2">
           <span className="mr-2 text-[13px] text-ink-muted">
-            <span className="font-semibold text-rust">{pendingCount}</span> pending changes
+            <span className="font-semibold text-rust">{pendingCount}</span> pending{" "}
+            {pendingCount === 1 ? "change" : "changes"}
           </span>
-          <button className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium hover:bg-subtle">
+          <button
+            onClick={() => toast.info("Export to Word with tracked changes is next on the roadmap.")}
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium hover:bg-subtle"
+          >
             <Download size={15} /> Export .docx
           </button>
-          <button className="flex items-center gap-1.5 rounded-lg bg-rust px-3 py-1.5 text-sm font-medium text-white hover:bg-rust-dark">
+          <button
+            onClick={() => toast.info("Sending to the counterparty isn't part of this demo.")}
+            className="flex items-center gap-1.5 rounded-lg bg-rust px-3 py-1.5 text-sm font-medium text-white hover:bg-rust-dark"
+          >
             <Send size={15} /> Send to counterparty
           </button>
         </div>
@@ -70,9 +80,7 @@ export default function Header({ document, pendingCount }: HeaderProps) {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`border-b-2 pb-2.5 font-medium transition-colors ${
-              tab === activeTab
-                ? "border-rust text-ink"
-                : "border-transparent text-ink-muted hover:text-ink"
+              tab === activeTab ? "border-rust text-ink" : "border-transparent text-ink-muted hover:text-ink"
             }`}
           >
             {tab}
