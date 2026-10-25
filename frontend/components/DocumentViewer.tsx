@@ -39,9 +39,12 @@ export default function DocumentViewer(props: DocumentViewerProps) {
   // A different document or version: forget any selection popup.
   useEffect(() => setPopup(null), [props.documentKey]);
 
-  // Highlight a search hit once the document's text is on screen.
+  // Highlight a search hit (or the text being edited) once the document's text is on screen.
   useEffect(() => {
-    if (!props.highlight || !articleRef.current) return;
+    if (!props.highlight || !articleRef.current) {
+      clearHighlight();
+      return;
+    }
     highlightMatch(articleRef.current, props.highlight.query, props.highlight.occurrence);
   }, [props.highlight, props.documentKey]);
 

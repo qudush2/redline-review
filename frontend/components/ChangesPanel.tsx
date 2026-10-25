@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowUp, CheckCheck, LoaderCircle, PencilLine, Replace, ShieldCheck, Sparkles, X } from "lucide-react";
 import ChangeCard from "./ChangeCard";
 import type { HistoryEntry, SuggestionsResponse } from "@/lib/api";
@@ -20,11 +20,18 @@ type ChangesPanelProps = {
   aiBusy: boolean;
   aiResult: SuggestionsResponse | null; // the last AI answer, summarized at the top of Pending
   onDismissAiResult: () => void;
+  editForm: React.ReactNode; // the suggest-edit form, shown at the top of Pending while open
 };
 
 // Right column: pending redlines to accept/reject, version history, and the AI box.
 export default function ChangesPanel(props: ChangesPanelProps) {
   const [tab, setTab] = useState<"pending" | "history">("pending");
+
+  // Opening the edit form always brings the Pending tab forward, where the form lives.
+  const formIsOpen = Boolean(props.editForm);
+  useEffect(() => {
+    if (formIsOpen) setTab("pending");
+  }, [formIsOpen]);
 
   return (
     <aside className="flex w-[380px] shrink-0 flex-col border-l border-line bg-surface">
@@ -43,36 +50,40 @@ export default function ChangesPanel(props: ChangesPanelProps) {
         {tab === "pending" ? <PendingList {...props} /> : <HistoryList entries={props.history} />}
       </div>
 
-      <AskAiBox onAskAi={props.onAskAi} busy={props.aiBusy} />
+      {/* Hidden while the edit form is open, to give the form room. */}
+      {formIsOpen ? null : <AskAiBox onAskAi={props.onAskAi} busy={props.aiBusy} />}
     </aside>
   );
 }
 
 function PendingList(props: ChangesPanelProps) {
-  const { changes, busy, onAccept, onReject, onAcceptAll, onSuggestEdit, onRenameTerm } = props;
+  const { changes, busy, onAccept, onReject, onAcceptAll, onSuggestEdit, onRenameTerm, editForm } = props;
   const acceptableCount = changes.filter((view) => !view.error).length;
 
   return (
     <div className="flex flex-col gap-3">
       {props.aiResult ? <AiResultNote result={props.aiResult} onDismiss={props.onDismissAiResult} /> : null}
 
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={onSuggestEdit}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle"
-        >
-          <PencilLine size={14} /> Suggest edit
-        </button>
-        <button
-          onClick={onRenameTerm}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle"
-        >
-          <Replace size={14} /> Rename term
-        </button>
-      </div>
+      {/* The edit form replaces the two quick-action buttons while it's open. */}
+      {editForm ?? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onSuggestEdit}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle"
+          >
+            <PencilLine size={14} /> Suggest edit
+          </button>
+          <button
+            onClick={onRenameTerm}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 text-[13px] font-medium hover:bg-subtle"
+          >
+            <Replace size={14} /> Rename term
+          </button>
+        </div>
+      )}
 
       {changes.length === 0 ? (
-        <TryItGuide />
+        editForm ? null : <TryItGuide />
       ) : (
         <>
           <div className="flex items-center justify-between pt-1">

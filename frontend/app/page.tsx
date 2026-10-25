@@ -17,7 +17,7 @@ import ChangesPanel from "@/components/ChangesPanel";
 import DocumentSidebar from "@/components/DocumentSidebar";
 import DocumentViewer, { type HighlightRequest } from "@/components/DocumentViewer";
 import Header from "@/components/Header";
-import SuggestEditDialog, { type DialogMode } from "@/components/SuggestEditDialog";
+import SuggestEditForm, { type EditMode } from "@/components/SuggestEditForm";
 import TopBar from "@/components/TopBar";
 import {
   api,
@@ -59,7 +59,9 @@ export default function Home() {
   const [aiResult, setAiResult] = useState<SuggestionsResponse | null>(null); // last AI answer, for the summary note
 
   const [editorName, setEditorName] = useState("Qudus");
-  const [dialog, setDialog] = useState<{ mode: DialogMode; find: string } | null>(null);
+  // The edit form in the side panel. `key` changes each time it opens, so a new
+  // text selection starts a fresh form instead of keeping the old one's fields.
+  const [editor, setEditor] = useState<{ mode: EditMode; find: string; key: number } | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
@@ -128,6 +130,7 @@ export default function Home() {
     setDocument(null);
     setPreview(null);
     setAiResult(null);
+    setEditor(null);
     reloadDocument(activeId).catch(showError);
   }, [activeId, reloadDocument, showError]);
 
@@ -206,9 +209,25 @@ export default function Home() {
     setPendingByDoc((all) => ({ ...all, [activeId]: update(all[activeId] ?? []) }));
   }
 
+  function openEditor(mode: EditMode, find: string) {
+    setEditor({ mode, find, key: Date.now() });
+  }
+
+  function closeEditor() {
+    setEditor(null);
+    setHighlight(null);
+  }
+
+  // While typing in the edit form, highlight the first match in the document.
+  // useCallback keeps this function the same between renders, so the form's
+  // "highlight after a pause" timer isn't restarted on every render.
+  const highlightFindText = useCallback((text: string) => {
+    setHighlight(text ? { query: text, occurrence: 1, key: Date.now() } : null);
+  }, []);
+
   function addPendingChange(request: ChangeRequest) {
     setPendingForActive((current) => [...current, makePendingChange(request, editorName)]);
-    setDialog(null);
+    closeEditor();
   }
 
   function rejectChange(id: string) {
@@ -343,7 +362,7 @@ export default function Home() {
                   cleanMarkdown={cleanMarkdown}
                   redlineUnavailable={pending.length > 0 && preview !== null && preview.redline_markdown === null}
                   highlight={highlight}
-                  onSuggestEdit={(text) => setDialog({ mode: "edit", find: text })}
+                  onSuggestEdit={(text) => openEditor("edit", text)}
                 />
                 <ChangesPanel
                   changes={pendingViews}
@@ -352,8 +371,21 @@ export default function Home() {
                   onAccept={acceptOne}
                   onReject={rejectChange}
                   onAcceptAll={acceptAll}
-                  onSuggestEdit={() => setDialog({ mode: "edit", find: "" })}
-                  onRenameTerm={() => setDialog({ mode: "rename", find: "" })}
+                  onSuggestEdit={() => openEditor("edit", "")}
+                  onRenameTerm={() => openEditor("rename", "")}
+                  editForm={
+                    editor ? (
+                      <SuggestEditForm
+                        key={editor.key}
+                        mode={editor.mode}
+                        initialFind={editor.find}
+                        document={document}
+                        onAdd={addPendingChange}
+                        onClose={closeEditor}
+                        onFindTextChange={highlightFindText}
+                      />
+                    ) : null
+                  }
                   onAskAi={askAi}
                   aiBusy={aiBusy}
                   aiResult={aiResult}
@@ -366,16 +398,6 @@ export default function Home() {
           )}
         </div>
       </div>
-
-      {dialog && document ? (
-        <SuggestEditDialog
-          mode={dialog.mode}
-          initialFind={dialog.find}
-          document={document}
-          onAdd={addPendingChange}
-          onClose={() => setDialog(null)}
-        />
-      ) : null}
     </div>
   );
 }
