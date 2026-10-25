@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.errors import NotFound, VersionConflict
-from app.redline import Change, apply_changes
+from app.redline import Change, apply_changes, build_redline
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -126,6 +126,36 @@ def save_changes(
         # 4. Save the result as a new version, with who did it and what changed.
         _add_version(document, new_text, author, applied)
         return document, applied
+
+
+def preview_changes(
+    doc_id: str,
+    changes: list[Change],
+    expected_version: int | None = None,
+) -> tuple[dict, str, str | None, list[dict]]:
+    """Run the same changes as save_changes, but save nothing.
+
+    Returns (document, text_after, redline_markdown, applied). This powers the
+    accept/reject screen: the user sees the redline before anything is saved, and
+    problems (ambiguous or missing text) show up while reviewing, not after clicking Accept.
+
+    Example (MSA at version 1):
+        preview_changes("master-services-agreement", [Change("State of California", "State of Delaware")])
+            -> (document still at version 1,
+                "...governed by the laws of the State of Delaware...",
+                "...governed by the laws of the State of <del>California,</del> <ins>Delaware,</ins>...",
+                [{"find": "State of California", "count": 1, ...}])
+    """
+    # 1. Same checks as a real save: the document exists and is still the version the user saw.
+    document = get_document(doc_id)
+    check_version(document, expected_version)
+
+    # 2. Apply the changes to a copy of the text (the stored document is not modified).
+    text_after, applied = apply_changes(document["text"], changes)
+
+    # 3. Build the inline redline for display (None if the document is huge).
+    redline_markdown = build_redline(document["text"], text_after)
+    return document, text_after, redline_markdown, applied
 
 
 def get_version(doc_id: str, version: int) -> dict:
