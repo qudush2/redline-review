@@ -15,13 +15,13 @@ Every edit, whether from a person or the AI, becomes a **pending redline** you c
 3. [Demo walkthrough](#demo-walkthrough)
 4. [API reference](#api-reference)
 5. [Product decisions](#product-decisions)
-6. [API design rationale](#api-design-rationale)
-7. [Architecture](#architecture)
-8. [Performance](#performance)
-9. [Testing](#testing)
-10. [Limitations](#limitations)
-11. [What I'd build next](#what-id-build-next)
-12. [Not done (yet)](#not-done-yet)
+6. [Deploying this with a legal team](#deploying-this-with-a-legal-team)
+7. [API design rationale](#api-design-rationale)
+8. [Architecture](#architecture)
+9. [Performance](#performance)
+10. [Testing](#testing)
+11. [Limitations](#limitations)
+12. [What I'd build next](#what-id-build-next)
 13. [How I built this](#how-i-built-this)
 
 ---
@@ -221,6 +221,35 @@ These matter more than the code. Each one trades something away on purpose.
 ---
 
 
+
+## Deploying this with a legal team
+
+If I were rolling this out with an in-house legal team, I'd start narrow, prove value on one high-volume workflow, then expand.
+
+**First use cases**
+
+1. **NDA triage.** High volume, low risk, and the playbook positions are clear (for example, a three-year confidentiality term). This is where AI suggestions save the most time with the least downside.
+2. **Vendor and customer MSAs against the playbook.** Liability caps, governing law, termination notice, and payment terms are the clauses lawyers fix over and over.
+3. **Defined-term cleanup** when a template changes, such as renaming "Licensee" to "Customer" across a contract.
+
+**Pilot plan (about six weeks)**
+
+- **Before week 1:** work with the General Counsel to write down the team's playbook positions, and gather 10 to 20 recent contracts as a baseline.
+- **Weeks 1–2:** two or three commercial counsel use it on NDAs only. Every AI suggestion is reviewed, and I hold a short weekly check-in to hear what's missing or wrong.
+- **Weeks 3–6:** expand to MSAs, and update the playbook based on what lawyers keep rejecting.
+- **End of pilot:** review the metrics with the GC and decide whether to roll out to the wider team, and which workflow comes next.
+
+**How I'd measure success**
+
+- **Turnaround time** per contract, compared with the baseline.
+- **AI suggestion accept rate.** A low rate tells me the playbook or prompt needs work.
+- **Guardrail drop rate:** how often the AI quotes text that isn't in the contract. It should stay low; a rise is an early warning.
+- **Escalations to the GC** that the playbook should have handled.
+- **Weekly active reviewers**, to see whether the tool sticks after the first few weeks.
+
+The biggest risk I'd watch is the Word workflow. Lawyers negotiate in Word, so export with tracked changes (#1 in [What I'd build next](#what-id-build-next)) is likely what decides adoption beyond the pilot.
+
+---
 
 ## API design rationale
 
