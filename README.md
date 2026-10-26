@@ -35,7 +35,7 @@ Every edit, whether from a person or the AI, becomes a **pending redline** you c
 As Sarah, I can:
 
 1. **Upload a contract** (.docx, .md, or .txt) and read it with its structure intact.
-2. **Search across all contracts** for a clause ("limitation of liability") and open the contract behind each hit.
+2. **Search across all contracts** for a clause ("limitation of liability") and jump to each hit.
 3. **Select text and propose an edit**, see the redline inline before it's saved, and accept or reject it.
 4. **Rename a defined term everywhere** in one action, and see the count before it applies.
 5. **Ask the AI for suggested edits** based on our playbook, and review each one before anything changes.
@@ -77,7 +77,7 @@ Without a key, the Ask AI box shows a friendly "AI isn't set up yet" message (HT
 
 The sample contracts are fictional and have scenarios planted in them. Open the **Master Services Agreement**:
 
-1. **Search.** Type `liability` in the left search box and look at the results: each shows the clause in context with the match in bold. Click one to open that contract.
+1. **Search.** Type `liability` in the left search box and click the "Limitation of Liability" result. The contract opens, scrolls to the clause, and highlights it.
 2. **Fix an ambiguous edit.** Select `thirty (30) days` in §9.2 and click **Suggest edit**. Enter `sixty (60) days` and click **Add change**. The phrase also appears in §4.1 (payment terms), so instead of guessing, the app asks **"Which one did you mean?"** and shows both in context. Pick the termination clause, and the redline appears inline.
 3. **Rename a defined term.** Click **Rename term**: `Licensee` → `Customer`. It shows **"Will change 24 occurrences"** before adding anything. Whole-word matching means "Sublicensee" is untouched. (Try renaming `Term` with "Whole words only" unchecked: it would also hit "**Term**ination".)
 4. **Ask the AI** (needs a key). Send "Apply our playbook." Suggestions arrive as cards with an **AI** badge and a reason that cites the playbook (unlimited liability → 2x fees cap, California → Delaware law, 30 → 60 days' notice). Any suggestion whose text isn't actually in the contract is dropped, and the panel says so.
@@ -340,7 +340,6 @@ cd backend && .venv/bin/pytest tests/test_performance.py -s  # with printed timi
 - **No PDF import.**
 - **Uploads through the app are limited to about 10MB.** The Next.js dev proxy rejects larger files; the API itself accepts up to 20MB when called directly (for example with `curl`).
 - **Very large documents display slowly.** The API handles a 10MB contract in under 0.2 seconds, but formatting that much text in the browser takes a long time (about 50 seconds for 15MB). Real contracts are usually well under 1MB.
-- **Search results open the contract but don't scroll to the match.** The result itself shows the clause in context.
 - **AI review is limited to 150k characters**, and it's untested against the live API in this repo's tests (the call is faked).
 - **No auth or permissions.** "Editing as" is a free-text name.
 
@@ -367,17 +366,22 @@ Ranked by customer impact:
 
 ## How I built this
 
-I started with the customer, not the code. After reading the brief, I researched how in-house legal teams work and what they need before they'll trust AI-assisted redlining: output they can verify against the contract, human approval on every change, and an audit trail. That shaped every product decision above.
+**I started with the customer, not the code.** After reading the brief, I researched how in-house legal teams work and what they need before they'll trust AI-assisted redlining: output they can verify against the contract, human approval on every change, and an audit trail. That shaped every product decision above.
 
-All of the product and design decisions are my own. I used AI as a collaborator throughout: I asked Claude for options and trade-offs on each key decision, pushed back where I disagreed, and steered toward the path I thought was best for the customer. For example:
+**What's mine: the product and design decisions.** I used Claude as a collaborator throughout: I asked for options and trade-offs on each key decision, pushed back where I disagreed, and chose the path I thought was best for the customer. For example:
 
 - I rejected a plain-text document view as not product-minded, in favor of a formatted "paper" view with inline, track-changes-style redlines and an accept/reject panel.
 - I chose to reject ambiguous edits and help the user pick, rather than silently change the first match.
 - I required "change all" for renaming defined terms, with whole-word matching.
+- I kept the AI as a suggester only, with a check that drops any suggestion quoting text that isn't in the contract.
 - I scoped uploads to .docx, .md, and .txt, because PDFs are usually signed final copies, not drafts under negotiation.
 - I kept storage in memory for the session, isolated in one module so it can be swapped for a database.
 - I moved editing from a pop-up into the side panel, so a lawyer can see the whole contract while typing an edit.
 
-I turned those decisions into a written plan (a decision log with reasons, an API spec, a phased build, and must/should/nice scope tiers) and built it phase by phase with Claude Code as a pair programmer. I set the rules up front: the simplest readable code, logic separate from routes, and every function documented with worked examples. After each phase I ran it, read the code, and made sure I could explain it before moving on.
+I turned those decisions into a written plan: a decision log with reasons, an API spec, a phased build, and must/should/nice scope tiers to fit the time limit.
 
-AI sped up the build. The product and design decisions are mine, and I can walk through any line of the code.
+**What I directed and verified, but didn't write line by line: the implementation.** Claude Code wrote most of the code from that plan, including the Python and TypeScript, the word-by-word comparison that builds the redline, the React state handling, and the details of the AI call. I'm comfortable reading Python and TypeScript, but I haven't shipped a production app like this before. I can explain what each part does, why it's there, and how the pieces connect. For some lower-level pieces, like the comparison that builds the redline, I'd lean on documentation or AI to rewrite them from scratch.
+
+**How I checked the work.** I set the rules up front (the simplest readable code, logic kept separate from routes, docstrings with worked examples), reviewed each phase before moving on, and tried the demo flows myself. Testing surfaced real issues that we then fixed, like a redline that split a paragraph in two and bold formatting that broke around renamed terms. Where something wasn't worth its complexity, I cut it and listed it under [Limitations](#limitations).
+
+AI did most of the typing. The customer thinking, the decisions, and the judgment about what to build, cut, and verify are mine.

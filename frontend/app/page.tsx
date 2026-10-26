@@ -15,7 +15,7 @@ import { toast, Toaster } from "sonner";
 import AppNav from "@/components/AppNav";
 import ChangesPanel from "@/components/ChangesPanel";
 import DocumentSidebar from "@/components/DocumentSidebar";
-import DocumentViewer from "@/components/DocumentViewer";
+import DocumentViewer, { type HighlightRequest } from "@/components/DocumentViewer";
 import Header from "@/components/Header";
 import SuggestEditForm, { type EditMode } from "@/components/SuggestEditForm";
 import TopBar from "@/components/TopBar";
@@ -65,6 +65,7 @@ export default function Home() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
+  const [highlight, setHighlight] = useState<HighlightRequest | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const pending = (activeId && pendingByDoc[activeId]) || NO_PENDING;
@@ -281,8 +282,14 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [searchQuery, showError]);
 
+  function selectDocument(id: string) {
+    setActiveId(id);
+    setHighlight(null);
+  }
+
   function openSearchResult(result: SearchResult) {
     setActiveId(result.document_id);
+    setHighlight({ query: searchResponse?.query ?? searchQuery, occurrence: result.occurrence_in_document, key: Date.now() });
   }
 
   // --- Upload ---------------------------------------------------------------------------
@@ -316,7 +323,7 @@ export default function Home() {
           <DocumentSidebar
             documents={documents}
             activeId={activeId}
-            onSelect={setActiveId}
+            onSelect={selectDocument}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             searchResponse={searchResponse}
@@ -338,6 +345,7 @@ export default function Home() {
                   documentKey={`${document.id}-v${document.version}`}
                   markdown={viewerMarkdown}
                   cleanMarkdown={cleanMarkdown}
+                  highlight={highlight}
                   redlineUnavailable={pending.length > 0 && preview !== null && preview.redline_markdown === null}
                   onSuggestEdit={(text) => openEditor("edit", text)}
                 />
