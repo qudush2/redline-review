@@ -14,7 +14,6 @@ type SuggestEditFormProps = {
   document: DocumentFull;
   onAdd: (request: ChangeRequest) => void;
   onClose: () => void;
-  onFindTextChange: (text: string) => void; // lets the page highlight the text in the document
 };
 
 // What the dry run told us about the edit the user is about to add.
@@ -29,7 +28,7 @@ type Check =
 //   - text not found      -> show the error
 //   - text appears twice+ -> show the "Which one?" picker
 //   - "all"               -> show how many places will change, and ask to confirm
-export default function SuggestEditForm({ mode, initialFind, document, onAdd, onClose, onFindTextChange }: SuggestEditFormProps) {
+export default function SuggestEditForm({ mode, initialFind, document, onAdd, onClose }: SuggestEditFormProps) {
   const isRename = mode === "rename";
 
   const [find, setFind] = useState(initialFind);
@@ -40,15 +39,6 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
   const [reason, setReason] = useState("");
   const [check, setCheck] = useState<Check | null>(null);
   const [checking, setChecking] = useState(false);
-
-  // Highlight the "find" text in the document as the user types (after a short pause).
-  // Skipped while it's still the text the user selected: that's already on screen,
-  // and jumping to an earlier match elsewhere would be disorienting.
-  useEffect(() => {
-    if (initialFind && find === initialFind) return;
-    const timer = setTimeout(() => onFindTextChange(find.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [find, initialFind, onFindTextChange]);
 
   // Editing any field makes the last check out of date.
   useEffect(() => {
@@ -134,7 +124,7 @@ export default function SuggestEditForm({ mode, initialFind, document, onAdd, on
       </p>
 
       <div className="mt-3 flex flex-col gap-3">
-        <Field label={isRename ? "Current term" : "Find (exact text)"} hint="The first match is highlighted in the document.">
+        <Field label={isRename ? "Current term" : "Find (exact text)"}>
           <textarea
             value={find}
             onChange={(event) => setFind(event.target.value)}

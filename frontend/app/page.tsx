@@ -15,7 +15,7 @@ import { toast, Toaster } from "sonner";
 import AppNav from "@/components/AppNav";
 import ChangesPanel from "@/components/ChangesPanel";
 import DocumentSidebar from "@/components/DocumentSidebar";
-import DocumentViewer, { type HighlightRequest } from "@/components/DocumentViewer";
+import DocumentViewer from "@/components/DocumentViewer";
 import Header from "@/components/Header";
 import SuggestEditForm, { type EditMode } from "@/components/SuggestEditForm";
 import TopBar from "@/components/TopBar";
@@ -65,7 +65,6 @@ export default function Home() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
-  const [highlight, setHighlight] = useState<HighlightRequest | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const pending = (activeId && pendingByDoc[activeId]) || NO_PENDING;
@@ -204,13 +203,7 @@ export default function Home() {
 
   function closeEditor() {
     setEditor(null);
-    setHighlight(null);
   }
-
-  // Stable between renders (useCallback), so the form's debounce timer isn't reset each render.
-  const highlightFindText = useCallback((text: string) => {
-    setHighlight(text ? { query: text, occurrence: 1, key: Date.now() } : null);
-  }, []);
 
   function addPendingChange(request: ChangeRequest) {
     setPendingForActive((current) => [...current, makePendingChange(request, editorName)]);
@@ -290,7 +283,6 @@ export default function Home() {
 
   function openSearchResult(result: SearchResult) {
     setActiveId(result.document_id);
-    setHighlight({ query: searchResponse?.query ?? searchQuery, occurrence: result.occurrence_in_document, key: Date.now() });
   }
 
   // --- Upload ---------------------------------------------------------------------------
@@ -347,7 +339,6 @@ export default function Home() {
                   markdown={viewerMarkdown}
                   cleanMarkdown={cleanMarkdown}
                   redlineUnavailable={pending.length > 0 && preview !== null && preview.redline_markdown === null}
-                  highlight={highlight}
                   onSuggestEdit={(text) => openEditor("edit", text)}
                 />
                 <ChangesPanel
@@ -368,7 +359,6 @@ export default function Home() {
                         document={document}
                         onAdd={addPendingChange}
                         onClose={closeEditor}
-                        onFindTextChange={highlightFindText}
                       />
                     ) : null
                   }

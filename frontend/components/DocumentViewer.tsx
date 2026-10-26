@@ -6,26 +6,16 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { Eye, EyeOff, Minus, PencilLine, Plus } from "lucide-react";
-import { clearHighlight, highlightMatch } from "@/lib/highlight";
-
-// "Highlight the 2nd match of 'liability'". `key` changes on every click, so
-// clicking the same search result twice still scrolls to it again.
-export type HighlightRequest = { query: string; occurrence: number; key: number };
 
 type DocumentViewerProps = {
   documentKey: string; // changes when a different document or version is shown
   markdown: string; // the redline (or plain text when nothing is pending)
   cleanMarkdown: string; // the text as it reads with every pending change accepted
   redlineUnavailable: boolean; // true for very large documents
-  highlight: HighlightRequest | null;
   onSuggestEdit: (selectedText: string) => void;
 };
 
 const ZOOM_STEPS = [80, 90, 100, 110, 125];
-
-// Above this size, formatting Markdown in the browser gets very slow (15MB took
-// close to a minute), so we show plain text instead. Same cap as the backend's redline.
-const MAX_FORMATTED_CHARS = 300_000;
 
 // Center column: the contract rendered on "paper", with redlines inline.
 // rehype-raw lets our <del>/<ins> tags through; rehype-sanitize strips anything unsafe.
@@ -34,19 +24,8 @@ export default function DocumentViewer(props: DocumentViewerProps) {
   const [zoomIndex, setZoomIndex] = useState(2); // 100%
   const [popup, setPopup] = useState<{ text: string; top: number; left: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const articleRef = useRef<HTMLElement>(null);
 
   useEffect(() => setPopup(null), [props.documentKey]);
-
-  useEffect(() => {
-    if (!props.highlight || !articleRef.current) {
-      clearHighlight();
-      return;
-    }
-    highlightMatch(articleRef.current, props.highlight.query, props.highlight.occurrence);
-  }, [props.highlight, props.documentKey]);
-
-  useEffect(() => clearHighlight, []);
 
   // After the user selects text in the contract, show a small "Suggest edit" button above it.
   function handleMouseUp() {
@@ -68,8 +47,6 @@ export default function DocumentViewer(props: DocumentViewerProps) {
   }
 
   const zoom = ZOOM_STEPS[zoomIndex];
-  const shownText = showRedline ? props.markdown : props.cleanMarkdown;
-  const isLarge = shownText.length > MAX_FORMATTED_CHARS;
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
@@ -98,26 +75,19 @@ export default function DocumentViewer(props: DocumentViewerProps) {
       </div>
 
       <div ref={scrollRef} onMouseUp={handleMouseUp} className="thin-scroll relative flex-1 overflow-y-auto px-8 py-8">
-        {isLarge ? (
+        {props.redlineUnavailable && showRedline ? (
           <p className="mx-auto mb-4 max-w-[816px] rounded-lg bg-clay px-4 py-2 text-[13px] text-rust">
-            Large document: shown as plain text so it loads quickly
-            {props.redlineUnavailable ? ". Review each change in the panel on the right." : "."}
+            This document is too large to show changes inline. Review each change in the panel on the right.
           </p>
         ) : null}
 
         <article
-          ref={articleRef}
           style={{ zoom: zoom / 100 }}
           className="paper mx-auto max-w-[816px] rounded-sm bg-white px-20 py-16 shadow-[0_1px_3px_rgba(61,51,41,0.08),0_8px_24px_rgba(61,51,41,0.06)]"
         >
-          {isLarge ? (
-            // One plain block of text: the browser lays this out fast, even at 10MB+.
-            <div className="whitespace-pre-wrap">{shownText}</div>
-          ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
-              {shownText}
-            </ReactMarkdown>
-          )}
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+            {showRedline ? props.markdown : props.cleanMarkdown}
+          </ReactMarkdown>
         </article>
 
         {popup ? (

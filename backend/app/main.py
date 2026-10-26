@@ -15,7 +15,6 @@ import logging
 
 from fastapi import FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -43,15 +42,6 @@ app = FastAPI(
     description="Propose, preview, and apply contract edits, and search across documents.",
     # Show our error shape in the docs page for the common error codes.
     responses={code: {"model": ErrorResponse} for code in (400, 404, 409, 413, 415, 422, 500, 502, 503)},
-)
-
-# Uploads skip the Next.js proxy (it times out on large files in dev) and go
-# straight from the browser to this server. Allow that one origin to call us.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 # Load the sample contracts once, when the server starts.

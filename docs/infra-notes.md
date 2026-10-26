@@ -22,9 +22,9 @@ Running notes on what would change to take this from a local prototype to produc
 
 ## Uploads
 
-- **Now:** converted in the request, 20MB limit, .docx/.md/.txt only.
+- **Now:** converted in the request, .docx/.md/.txt only; 20MB at the API, about 10MB through the web app (the Next.js dev proxy's limit).
 - **Production:** virus scanning before conversion; async conversion workers for large .docx files (return 202 plus a status endpoint); store the original file next to the Markdown so "export to Word with tracked changes" can preserve formatting.
-- **Lesson from Part I:** the Next.js dev proxy timed out on a 15MB upload that FastAPI handled in 0.07s. In production, uploads should go straight to storage via pre-signed URLs, not through an app-server proxy.
+- **Lesson from Part I:** the Next.js dev proxy rejects uploads over about 10MB, even though FastAPI accepts a 15MB file in under 0.1 seconds. In production, uploads should go straight to storage via pre-signed URLs, not through an app-server proxy.
 
 ## AI
 

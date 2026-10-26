@@ -89,9 +89,3 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line) transparent;
 }
-
-/* A search hit, painted by lib/highlight.ts without changing the page's HTML. */
-::highlight(search-hit) {
-  background-color: #f6d9a8;
-  color: inherit;
-}

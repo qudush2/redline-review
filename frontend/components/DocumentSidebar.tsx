@@ -169,7 +169,7 @@ function UploadZone({ onUpload, uploading }: { onUpload: (file: File) => void; u
           <Upload size={18} className="text-rust" />
         )}
         <span className="text-sm font-medium">{uploading ? "Uploading…" : "Upload a contract"}</span>
-        <span className="text-xs text-ink-faint">.docx, .md, or .txt · up to 20MB</span>
+        <span className="text-xs text-ink-faint">.docx, .md, or .txt · up to 10MB</span>
         <input
           type="file"
           accept=".docx,.md,.txt"

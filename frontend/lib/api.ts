@@ -98,14 +98,10 @@ export class ApiError extends Error {
 
 // --- The one place that calls fetch ---------------------------------------------
 
-// Uploads go straight to FastAPI instead of through the /api proxy: the Next.js
-// dev proxy times out on large files (15MB+), while FastAPI takes them in well under a second.
-const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-async function request<T>(path: string, options: RequestInit = {}, baseUrl = "/api"): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`, options);
+    response = await fetch(`/api${path}`, options);
   } catch {
     throw new ApiError("Can't reach the API. Is the backend running?", 0, "network_error");
   }
@@ -160,6 +156,6 @@ export const api = {
     form.append("file", file);
     form.append("author", author);
     // No Content-Type header: the browser sets the multipart boundary itself.
-    return request<DocumentFull>("/documents/upload", { method: "POST", body: form }, DIRECT_API_URL);
+    return request<DocumentFull>("/documents/upload", { method: "POST", body: form });
   },
 };

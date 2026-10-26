@@ -35,7 +35,7 @@ Every edit, whether from a person or the AI, becomes a **pending redline** you c
 As Sarah, I can:
 
 1. **Upload a contract** (.docx, .md, or .txt) and read it with its structure intact.
-2. **Search across all contracts** for a clause ("limitation of liability") and jump to each hit.
+2. **Search across all contracts** for a clause ("limitation of liability") and open the contract behind each hit.
 3. **Select text and propose an edit**, see the redline inline before it's saved, and accept or reject it.
 4. **Rename a defined term everywhere** in one action, and see the count before it applies.
 5. **Ask the AI for suggested edits** based on our playbook, and review each one before anything changes.
@@ -77,7 +77,7 @@ Without a key, the Ask AI box shows a friendly "AI isn't set up yet" message (HT
 
 The sample contracts are fictional and have scenarios planted in them. Open the **Master Services Agreement**:
 
-1. **Search.** Type `liability` in the left search box and click the "Limitation of Liability" result. The document scrolls to it and highlights it.
+1. **Search.** Type `liability` in the left search box and look at the results: each shows the clause in context with the match in bold. Click one to open that contract.
 2. **Fix an ambiguous edit.** Select `thirty (30) days` in §9.2 and click **Suggest edit**. Enter `sixty (60) days` and click **Add change**. The phrase also appears in §4.1 (payment terms), so instead of guessing, the app asks **"Which one did you mean?"** and shows both in context. Pick the termination clause, and the redline appears inline.
 3. **Rename a defined term.** Click **Rename term**: `Licensee` → `Customer`. It shows **"Will change 24 occurrences"** before adding anything. Whole-word matching means "Sublicensee" is untouched. (Try renaming `Term` with "Whole words only" unchecked: it would also hit "**Term**ination".)
 4. **Ask the AI** (needs a key). Send "Apply our playbook." Suggestions arrive as cards with an **AI** badge and a reason that cites the playbook (unlimited liability → 2x fees cap, California → Delaware law, 30 → 60 days' notice). Any suggestion whose text isn't actually in the contract is dropped, and the panel says so.
@@ -262,7 +262,7 @@ redline-review/
 
 - **Logic is separate from routes.** `redline.py`, `search.py`, and `matching.py` are pure functions with no web framework, so they're easy to test and reuse. Each route in `main.py` reads the request, calls one function, and returns the result.
 - **The frontend only displays data.** Every rule (matching, ambiguity, versioning, the AI guardrail, the redline diff) lives in Python, where it's tested in one place. The redline itself is built on the server by comparing before/after text word by word (`difflib`), and comes back as Markdown with `<del>`/`<ins>` tags.
-- **One command runs everything.** Next.js forwards `/api/` to FastAPI, so there's no cross-origin setup. The one exception is uploads, which go straight to port 8000: the Next.js dev proxy timed out on a 15MB upload that FastAPI itself handled in 0.07s.
+- **One command runs everything.** Next.js forwards `/api/` to FastAPI, so there's no cross-origin setup.
 - **In-memory storage, isolated in `store.py`.** No database to install, instant lookups, and a single lock wraps "check version → apply → save" so two simultaneous edits can't both start from the same text. Swapping in Postgres means changing one module. The trade-off: data lasts only as long as the server, and the lock only works on one server (see [docs/infra-notes.md](docs/infra-notes.md)).
 - **AI call design.** One small function calls Claude (`claude-sonnet-5-5` by default, set in `.env`). **Structured outputs** guarantee the reply matches our JSON schema (`[{find, replace, reason}]`), so there's no free-text parsing. If the model declines or the call fails, the user gets a plain message instead of an error page. The function is swapped for a fake in tests, so the tests need no key or network. In production, documents sent to a model provider would go under a zero-data-retention agreement.
 
@@ -291,7 +291,6 @@ Measured by [backend/tests/test_performance.py](backend/tests/test_performance.p
 **Deliberate limits for large documents:**
 
 - **The inline redline is skipped above 300k characters.** A word-by-word diff gets slow on huge texts, so the API returns `redline_markdown: null` and the UI shows each change as a card instead.
-- **The viewer shows plain text above 300k characters.** Formatting 15MB of Markdown in the browser took about 50 seconds; plain text renders in 0.16 seconds.
 - **AI review is capped at 150k characters.** Chunking long contracts into sections is the next step.
 - **Version snapshots cost memory.** Each version stores the full text, so ten edits to a 10MB contract hold ~100MB. Production would store diffs.
 
@@ -336,9 +335,12 @@ cd backend && .venv/bin/pytest tests/test_performance.py -s  # with printed timi
 ## Limitations
 
 - **Formatting is partly lost on .docx import.** Headings, bold, and paragraphs survive; tables, comments, and existing tracked changes don't.
-- **Edits can't span formatting.** Selecting text that crosses a **bold** boundary won't match, because the stored Markdown contains `*` markers that aren't on screen.
+- **Edits can't span formatting.** Selecting text that crosses a **bold** boundary won't match, because the stored Markdown contains `**` markers that aren't on screen.
 - **In-memory only.** Restarting the API resets everything.
 - **No PDF import.**
+- **Uploads through the app are limited to about 10MB.** The Next.js dev proxy rejects larger files; the API itself accepts up to 20MB when called directly (for example with `curl`).
+- **Very large documents display slowly.** The API handles a 10MB contract in under 0.2 seconds, but formatting that much text in the browser takes a long time (about 50 seconds for 15MB). Real contracts are usually well under 1MB.
+- **Search results open the contract but don't scroll to the match.** The result itself shows the clause in context.
 - **AI review is limited to 150k characters**, and it's untested against the live API in this repo's tests (the call is faked).
 - **No auth or permissions.** "Editing as" is a free-text name.
 
